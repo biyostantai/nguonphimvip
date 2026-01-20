@@ -1,1 +1,1 @@
-/phim/* /movie.html 200
+/phim/:slug /movie.html?slug=:slug 200

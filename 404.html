@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đang chuyển hướng... - NguonPhimVIP</title>
     <script>
-        // SPA Fallback Router for Cloudflare Pages
+        // SPA Fallback Router for Cloudflare Pages (SessionStorage Handover)
         (function() {
             const path = window.location.pathname;
             const search = window.location.search;
@@ -17,7 +17,18 @@
                 
                 if (phimIndex !== -1 && segments[phimIndex + 1]) {
                     const slug = segments[phimIndex + 1];
-                    // Chuyển hướng về movie.html với query param
+                    
+                    // LƯU SLUG VÀO SESSION STORAGE
+                    // Để phòng trường hợp redirect làm mất query param (Cloudflare Pretty URLs)
+                    try {
+                        sessionStorage.setItem('pendingMovieSlug', slug);
+                        console.log('Saved slug to sessionStorage:', slug);
+                    } catch (e) {
+                        console.error('Failed to save slug:', e);
+                    }
+
+                    // Chuyển hướng về movie.html với query param (vẫn cố gắng truyền qua URL)
+                    // Sử dụng replace để không lưu lịch sử trang lỗi
                     window.location.replace('/movie.html?slug=' + slug);
                     return;
                 }

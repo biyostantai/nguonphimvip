@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -1510,6 +1510,22 @@ function getMovieSlugFromURL() {
     // 1. Ưu tiên lấy từ URL Parameter (?slug=...)
     const urlParams = new URLSearchParams(search);
     let paramSlug = urlParams.get('slug') || urlParams.get('id');
+    
+    // 1.1 Kiểm tra SessionStorage (Fallback cho trường hợp redirect bị mất query param)
+    if (!paramSlug) {
+        try {
+            const storedSlug = sessionStorage.getItem('pendingMovieSlug');
+            if (storedSlug) {
+                console.log("   ✅ Found slug in sessionStorage:", storedSlug);
+                // Xóa sau khi lấy để tránh dùng lại cho trang khác
+                sessionStorage.removeItem('pendingMovieSlug');
+                paramSlug = storedSlug;
+            }
+        } catch (e) {
+            console.error("Error checking sessionStorage:", e);
+        }
+    }
+
     if (paramSlug) {
         // Nếu slug chứa ký tự phân cách (do rewrite splat), chỉ lấy phần đầu
         if (paramSlug.includes('/')) {
