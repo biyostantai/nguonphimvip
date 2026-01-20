@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -1779,6 +1779,11 @@ async function loadMovieData() {
         } else {
              showError('Không tìm thấy mã phim (slug) trong đường dẫn.');
         }
+        
+        // Tự động chuyển về trang chủ sau 5 giây nếu không tìm thấy slug
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 5000);
         return;
     }
     

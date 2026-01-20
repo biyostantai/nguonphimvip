@@ -57,7 +57,7 @@ async function generateSitemap() {
                 }
 
                 xml += `  <url>\n`;
-                xml += `    <loc>${escapeXml(`${domain}/phim/${movie.slug}`)}</loc>\n`;
+                xml += `    <loc>${escapeXml(`${domain}/movie.html?slug=${movie.slug}`)}</loc>\n`;
                 xml += `    <lastmod>${lastMod}</lastmod>\n`;
                 xml += `    <changefreq>weekly</changefreq>\n`;
                 xml += `    <priority>0.8</priority>\n`;
