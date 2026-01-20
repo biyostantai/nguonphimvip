@@ -1,4 +1,4 @@
-﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -1509,8 +1509,12 @@ function getMovieSlugFromURL() {
 
     // 1. Ưu tiên lấy từ URL Parameter (?slug=...)
     const urlParams = new URLSearchParams(search);
-    const paramSlug = urlParams.get('slug') || urlParams.get('id');
+    let paramSlug = urlParams.get('slug') || urlParams.get('id');
     if (paramSlug) {
+        // Nếu slug chứa ký tự phân cách (do rewrite splat), chỉ lấy phần đầu
+        if (paramSlug.includes('/')) {
+            paramSlug = paramSlug.split('/')[0];
+        }
         console.log("   ✅ Found slug in params:", paramSlug);
         return paramSlug;
     }
