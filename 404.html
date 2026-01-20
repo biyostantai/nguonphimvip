@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đang chuyển hướng... - NguonPhimVIP</title>
+    <script>
+        // SPA Fallback Router for Cloudflare Pages
+        (function() {
+            const path = window.location.pathname;
+            const search = window.location.search;
+            
+            // Xử lý trường hợp truy cập /phim/slug mà bị 404
+            if (path.includes('/phim/')) {
+                const segments = path.split('/').filter(Boolean);
+                const phimIndex = segments.findIndex(s => s.toLowerCase() === 'phim');
+                
+                if (phimIndex !== -1 && segments[phimIndex + 1]) {
+                    const slug = segments[phimIndex + 1];
+                    // Chuyển hướng về movie.html với query param
+                    window.location.replace('/movie.html?slug=' + slug);
+                    return;
+                }
+            }
+            
+            // Nếu không phải link phim, chuyển về trang chủ sau 2s
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+        })();
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h1>404 - Không tìm thấy trang</h1>
+        <p>Đang kiểm tra đường dẫn...</p>
+    </div>
+</body>
+</html>

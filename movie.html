@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -1525,17 +1525,27 @@ function getMovieSlugFromURL() {
     // 2. Tìm segment sau 'phim' (ví dụ: /phim/ten-phim)
     const phimIndex = segments.findIndex(s => s.toLowerCase() === 'phim');
     if (phimIndex !== -1 && segments[phimIndex + 1]) {
-        console.log("   ✅ Found slug after 'phim':", segments[phimIndex + 1]);
-        return segments[phimIndex + 1];
+        let pathSlug = segments[phimIndex + 1];
+        // Decode URI component để xử lý tiếng Việt hoặc ký tự đặc biệt
+        try {
+            pathSlug = decodeURIComponent(pathSlug);
+        } catch (e) {
+            console.warn("Lỗi decode slug:", e);
+        }
+        console.log("   ✅ Found slug after 'phim':", pathSlug);
+        return pathSlug;
     }
     
     // 3. Fallback: Lấy segment cuối cùng nếu không phải là các từ khóa hệ thống
     // Hỗ trợ trường hợp rewrite bị mất chữ 'phim' -> /ten-phim
     if (segments.length > 0) {
-        const lastSegment = segments[segments.length - 1];
+        let lastSegment = segments[segments.length - 1];
         const ignoreList = ['movie', 'movie.html', 'index', 'index.html', 'phim'];
         
         if (!ignoreList.includes(lastSegment.toLowerCase()) && !lastSegment.includes('.')) {
+             try {
+                lastSegment = decodeURIComponent(lastSegment);
+             } catch (e) {}
              console.log("   ⚠️ Fallback: Using last segment as slug:", lastSegment);
              return lastSegment;
         }
