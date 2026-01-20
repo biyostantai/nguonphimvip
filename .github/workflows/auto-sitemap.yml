@@ -1,0 +1,33 @@
+name: Tự động cập nhật Sitemap
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Chạy tự động vào 0h sáng mỗi ngày (giờ UTC)
+  workflow_dispatch: # Cho phép chạy tay
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write # Cấp quyền ghi vào kho code để push sitemap.xml
+
+    steps:
+      - name: Kiểm tra code (Checkout)
+        uses: actions/checkout@v3
+
+      - name: Cài đặt Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Chạy Robot tạo sitemap
+        run: node generate-sitemap.js
+
+      - name: Lưu và Đẩy lên GitHub
+        run: |
+          git config --global user.name "GitHub Action Robot"
+          git config --global user.email "action@github.com"
+          git add sitemap.xml
+          # Chỉ commit nếu có thay đổi
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Robot: Tự động cập nhật sitemap.xml" && git push)

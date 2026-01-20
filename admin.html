@@ -1,0 +1,3390 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Quản Trị NguonPhimVIP</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="shortcut icon" href="favicon.svg">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- 🔥 FIREBASE SDK - PHIÊN BẢN COMPAT (COMMENTED OUT - USING KKPHIM API NOW) 🔥 -->
+<script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+apiKey: "AIzaSyCFfa_7SSxy8DQngWBCck36W9c_QdR6QV4",
+authDomain: "nguonphimvip.firebaseapp.com",
+projectId: "nguonphimvip",
+storageBucket: "nguonphimvip.firebasestorage.app",
+messagingSenderId: "844131201188",
+appId: "1:844131201188:web:f982705ad4a096b258b631"
+};
+try {
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+window.firebaseDb = db;
+} catch (error) {
+console.error("❌ Lỗi kết nối Firebase:", error);
+}
+</script>
+
+<!-- ==================== KKPHIM API CONFIGURATION ==================== -->
+<script>
+const KKPHIM_API_BASE = 'https://phimapi.com';
+const KKPHIM_IMAGE_PROXY = 'https://phimapi.com/image.php?url=';
+
+// Convert image URL to WEBP format
+function convertImageToWebP(imageUrl) {
+if (!imageUrl) {
+return imageUrl;
+}
+if (!/^https?:\/\//i.test(imageUrl)) {
+if (imageUrl.startsWith('//')) {
+imageUrl = 'https:' + imageUrl;
+} else if (imageUrl.startsWith('/')) {
+imageUrl = 'https://img.phimapi.com' + imageUrl;
+} else {
+imageUrl = 'https://img.phimapi.com/' + imageUrl;
+}
+}
+if (imageUrl.includes('via.placeholder.com') || imageUrl.includes('phimapi.com/image.php')) {
+return imageUrl;
+}
+return `${KKPHIM_IMAGE_PROXY}${encodeURIComponent(imageUrl)}`;
+}
+
+// Map KKPhim API response to our movie format
+function mapKKPhimMovieToLocal(kkphimMovie) {
+const categoryName = kkphimMovie.category && kkphimMovie.category.length > 0 
+? (kkphimMovie.category[0].name || kkphimMovie.category[0]) 
+: (kkphimMovie.category || 'Chưa phân loại');
+  
+// Map episodes from KKPhim format
+let episodes = [];
+if (kkphimMovie.episodes && Array.isArray(kkphimMovie.episodes)) {
+episodes = kkphimMovie.episodes.map((ep, index) => {
+const episodeNumber = ep.episodeNumber || ep.episode || ep.server_data?.[0]?.episode || (index + 1);
+return {
+id: `${kkphimMovie.slug}-ep-${episodeNumber}`,
+episodeNumber: parseInt(episodeNumber),
+title: ep.title || ep.name || `Tập ${episodeNumber}`,
+videoUrl: ep.link_m3u8 || ep.link_embed || ep.server_data?.[0]?.link_m3u8 || ep.videoUrl || '',
+slug: ep.slug || ''
+};
+});
+}
+
+return {
+id: kkphimMovie.slug || kkphimMovie._id || kkphimMovie.id,
+slug: kkphimMovie.slug || kkphimMovie._id,
+title: kkphimMovie.name || kkphimMovie.title,
+category: categoryName,
+description: kkphimMovie.content || kkphimMovie.description || '',
+year: kkphimMovie.year || null,
+rating: kkphimMovie.rating?.average || kkphimMovie.rating || null,
+poster: convertImageToWebP(kkphimMovie.poster_url || kkphimMovie.poster || kkphimMovie.thumb_url || ''),
+episodes: episodes,
+modified: kkphimMovie.modified?.time || kkphimMovie.createdAt || new Date().toISOString(),
+status: kkphimMovie.status || 'Đang chiếu'
+};
+}
+
+// Fetch from KKPhim API with error handling
+async function fetchKKPhimAPI(url) {
+try {
+const response = await fetch(url);
+if (!response.ok) {
+throw new Error(`HTTP error! status: ${response.status}`);
+}
+const data = await response.json();
+return data;
+} catch (error) {
+console.error('❌ Lỗi khi fetch KKPhim API:', error);
+throw error;
+}
+}
+</script>
+<style>
+:root {
+--primary-color: #1a73e8;
+--primary-dark: #0d47a1;
+--secondary-color: #34a853;
+--danger-color: #ea4335;
+--warning-color: #fbbc05;
+--light-color: #f8f9fa;
+--dark-color: #202124;
+--gray-color: #5f6368;
+--border-color: #dadce0;
+--shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+body {
+background-color: #f5f7fa;
+color: var(--dark-color);
+line-height: 1.6;
+}
+/* Login Screen */
+.login-container {
+display: flex;
+justify-content: center;
+align-items: center;
+min-height: 100vh;
+background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+padding: 20px;
+}
+.login-box {
+background-color: white;
+border-radius: 12px;
+box-shadow: var(--shadow);
+padding: 40px;
+width: 100%;
+max-width: 450px;
+text-align: center;
+}
+.login-box h1 {
+color: var(--primary-color);
+margin-bottom: 10px;
+font-size: 28px;
+}
+.login-box p {
+color: var(--gray-color);
+margin-bottom: 30px;
+}
+.login-form .input-group {
+margin-bottom: 20px;
+text-align: left;
+}
+.login-form label {
+display: block;
+margin-bottom: 8px;
+color: var(--dark-color);
+font-weight: 500;
+}
+.login-form input {
+width: 100%;
+padding: 14px 16px;
+border: 1px solid var(--border-color);
+border-radius: 8px;
+font-size: 16px;
+transition: border 0.3s;
+}
+.login-form input:focus {
+outline: none;
+border-color: var(--primary-color);
+box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+.login-btn {
+background-color: var(--primary-color);
+color: white;
+border: none;
+border-radius: 8px;
+padding: 14px;
+width: 100%;
+font-size: 16px;
+font-weight: 600;
+cursor: pointer;
+transition: background-color 0.3s;
+margin-top: 10px;
+}
+.login-btn:hover {
+background-color: var(--primary-dark);
+}
+.error-message {
+color: var(--danger-color);
+margin-top: 15px;
+display: none;
+}
+/* Admin Dashboard (hidden by default) */
+.admin-container {
+display: none;
+min-height: 100vh;
+}
+/* Header */
+.admin-header {
+background-color: white;
+box-shadow: var(--shadow);
+padding: 16px 30px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+position: sticky;
+top: 0;
+z-index: 100;
+}
+.admin-header h1 {
+color: var(--primary-color);
+font-size: 24px;
+display: flex;
+align-items: center;
+gap: 10px;
+}
+.admin-header h1 i {
+color: var(--secondary-color);
+}
+.logout-btn {
+background-color: var(--danger-color);
+color: white;
+border: none;
+border-radius: 6px;
+padding: 10px 20px;
+font-weight: 500;
+cursor: pointer;
+display: flex;
+align-items: center;
+gap: 8px;
+transition: background-color 0.3s;
+}
+.logout-btn:hover {
+background-color: #c62828;
+}
+/* Main Layout */
+.admin-main {
+display: flex;
+min-height: calc(100vh - 70px);
+}
+/* Sidebar */
+.admin-sidebar {
+width: 250px;
+background-color: white;
+border-right: 1px solid var(--border-color);
+padding: 20px 0;
+box-shadow: var(--shadow);
+}
+.admin-nav {
+list-style: none;
+}
+.admin-nav li {
+margin-bottom: 5px;
+}
+.admin-nav a {
+display: flex;
+align-items: center;
+padding: 15px 25px;
+color: var(--dark-color);
+text-decoration: none;
+transition: all 0.3s;
+gap: 12px;
+border-left: 4px solid transparent;
+}
+.admin-nav a:hover {
+background-color: rgba(26, 115, 232, 0.05);
+color: var(--primary-color);
+}
+.admin-nav a.active {
+background-color: rgba(26, 115, 232, 0.1);
+color: var(--primary-color);
+border-left: 4px solid var(--primary-color);
+font-weight: 500;
+}
+.admin-nav i {
+width: 20px;
+text-align: center;
+}
+/* Content Area */
+.admin-content {
+flex: 1;
+padding: 30px;
+overflow-y: auto;
+}
+.section-title {
+font-size: 24px;
+margin-bottom: 25px;
+color: var(--dark-color);
+display: flex;
+align-items: center;
+gap: 10px;
+}
+.section-title i {
+color: var(--primary-color);
+}
+/* Dashboard Overview */
+.stats-container {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+gap: 20px;
+margin-bottom: 30px;
+}
+.stat-card {
+background-color: white;
+border-radius: 10px;
+padding: 20px;
+box-shadow: var(--shadow);
+display: flex;
+align-items: center;
+gap: 15px;
+}
+.stat-icon {
+width: 60px;
+height: 60px;
+border-radius: 10px;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 24px;
+color: white;
+}
+.stat-icon.movies {
+background-color: var(--primary-color);
+}
+.stat-icon.episodes {
+background-color: var(--secondary-color);
+}
+.stat-icon.trending {
+background-color: var(--warning-color);
+}
+.stat-icon.backup {
+background-color: #9c27b0;
+}
+.stat-icon.comments {
+background-color: #ff6b6b;
+}
+.stat-info h3 {
+font-size: 28px;
+color: var(--dark-color);
+}
+.stat-info p {
+color: var(--gray-color);
+}
+/* Forms */
+.form-container {
+background-color: white;
+border-radius: 10px;
+padding: 25px;
+box-shadow: var(--shadow);
+margin-bottom: 30px;
+}
+.form-row {
+display: flex;
+flex-wrap: wrap;
+gap: 20px;
+margin-bottom: 20px;
+}
+.form-group {
+flex: 1;
+min-width: 250px;
+}
+.form-group label {
+display: block;
+margin-bottom: 8px;
+font-weight: 500;
+color: var(--dark-color);
+}
+.form-group input,
+.form-group select,
+.form-group textarea {
+width: 100%;
+padding: 12px 15px;
+border: 1px solid var(--border-color);
+border-radius: 8px;
+font-size: 15px;
+transition: border 0.3s;
+}
+.form-group textarea {
+min-height: 120px;
+resize: vertical;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+outline: none;
+border-color: var(--primary-color);
+box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+.file-input-container {
+position: relative;
+overflow: hidden;
+display: inline-block;
+width: 100%;
+}
+.file-input-container input[type="file"] {
+position: absolute;
+left: 0;
+top: 0;
+opacity: 0;
+width: 100%;
+height: 100%;
+cursor: pointer;
+}
+.file-input-label {
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 12px 15px;
+background-color: var(--light-color);
+border: 1px dashed var(--border-color);
+border-radius: 8px;
+cursor: pointer;
+color: var(--gray-color);
+gap: 10px;
+transition: all 0.3s;
+}
+.file-input-label:hover {
+background-color: rgba(26, 115, 232, 0.05);
+border-color: var(--primary-color);
+color: var(--primary-color);
+}
+.file-preview {
+margin-top: 10px;
+max-width: 200px;
+border-radius: 6px;
+overflow: hidden;
+display: none;
+}
+.form-actions {
+display: flex;
+justify-content: flex-end;
+gap: 15px;
+margin-top: 25px;
+}
+.btn {
+padding: 12px 24px;
+border-radius: 8px;
+border: none;
+font-weight: 500;
+cursor: pointer;
+display: flex;
+align-items: center;
+gap: 8px;
+transition: all 0.3s;
+}
+.btn-primary {
+background-color: var(--primary-color);
+color: white;
+}
+.btn-primary:hover {
+background-color: var(--primary-dark);
+}
+.btn-secondary {
+background-color: var(--light-color);
+color: var(--dark-color);
+border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+background-color: #e9ecef;
+}
+.btn-success {
+background-color: var(--secondary-color);
+color: white;
+}
+.btn-success:hover {
+background-color: #2d8c47;
+}
+.btn-purple {
+background-color: #9c27b0;
+color: white;
+}
+.btn-purple:hover {
+background-color: #7b1fa2;
+}
+/* Movie List */
+.movie-list-container {
+background-color: white;
+border-radius: 10px;
+box-shadow: var(--shadow);
+overflow: hidden;
+}
+.table-responsive {
+overflow-x: auto;
+}
+.movie-table, .comments-table {
+width: 100%;
+border-collapse: collapse;
+}
+.movie-table thead, .comments-table thead {
+background-color: #f1f5fd;
+}
+.movie-table th, .comments-table th {
+padding: 16px 15px;
+text-align: left;
+font-weight: 600;
+color: var(--dark-color);
+border-bottom: 1px solid var(--border-color);
+}
+.movie-table td, .comments-table td {
+padding: 15px;
+border-bottom: 1px solid var(--border-color);
+vertical-align: middle;
+}
+.movie-table tbody tr:hover, .comments-table tbody tr:hover {
+background-color: rgba(26, 115, 232, 0.03);
+}
+.movie-poster {
+width: 80px;
+height: 100px;
+object-fit: cover;
+border-radius: 6px;
+}
+.status-badge {
+background-color: #e3f2fd;
+color: #1976d2;
+padding: 4px 8px;
+border-radius: 4px;
+font-size: 12px;
+font-weight: 500;
+}
+.actions-cell {
+display: flex;
+gap: 10px;
+}
+.action-btn {
+width: 36px;
+height: 36px;
+border-radius: 6px;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+border: none;
+color: white;
+transition: all 0.3s;
+}
+.edit-btn {
+background-color: var(--warning-color);
+}
+.edit-btn:hover {
+background-color: #e6a800;
+}
+.delete-btn {
+background-color: var(--danger-color);
+}
+.delete-btn:hover {
+background-color: #d32f2f;
+}
+.episode-btn {
+background-color: var(--secondary-color);
+}
+.episode-btn:hover {
+background-color: #2d8c47;
+}
+/* Episode Management */
+.episode-management {
+display: none;
+}
+.episode-list {
+margin-top: 20px;
+}
+.episode-item {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 15px;
+background-color: white;
+border-radius: 8px;
+margin-bottom: 10px;
+box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+/* Search Box */
+.search-box {
+margin-bottom: 20px;
+position: relative;
+}
+.search-box input {
+width: 100%;
+padding: 12px 15px 12px 45px;
+border: 1px solid var(--border-color);
+border-radius: 8px;
+font-size: 15px;
+}
+.search-box i {
+position: absolute;
+left: 15px;
+top: 50%;
+transform: translateY(-50%);
+color: var(--gray-color);
+}
+/* Episode Input Columns */
+.episode-columns {
+display: flex;
+gap: 20px;
+margin-bottom: 20px;
+}
+.episode-column {
+flex: 1;
+}
+.episode-column h4 {
+margin-bottom: 15px;
+color: var(--dark-color);
+}
+.bulk-episodes-input {
+min-height: 200px;
+font-family: monospace;
+font-size: 14px;
+}
+.episode-counter {
+margin-top: 10px;
+font-size: 14px;
+color: var(--gray-color);
+text-align: right;
+}
+/* Modal */
+.modal {
+display: none;
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(0, 0, 0, 0.7);
+z-index: 1000;
+justify-content: center;
+align-items: center;
+}
+.modal-content {
+background-color: white;
+border-radius: 12px;
+width: 90%;
+max-width: 600px;
+max-height: 90vh;
+overflow-y: auto;
+padding: 30px;
+box-shadow: var(--shadow);
+position: relative;
+}
+.close-modal {
+position: absolute;
+top: 20px;
+right: 20px;
+font-size: 24px;
+cursor: pointer;
+color: var(--gray-color);
+}
+.close-modal:hover {
+color: var(--dark-color);
+}
+/* Backup Section */
+.backup-actions {
+display: flex;
+flex-wrap: wrap;
+gap: 15px;
+margin-top: 20px;
+}
+.backup-info {
+background-color: #f8f9fa;
+border-left: 4px solid var(--primary-color);
+padding: 15px;
+margin-bottom: 20px;
+border-radius: 4px;
+}
+.backup-info ul {
+padding-left: 20px;
+margin-top: 10px;
+}
+.backup-info li {
+margin-bottom: 5px;
+color: var(--gray-color);
+}
+/* Debug Panel */
+.debug-panel {
+position: fixed;
+bottom: 20px;
+right: 20px;
+display: flex;
+flex-direction: column;
+gap: 10px;
+z-index: 1000;
+}
+.debug-btn {
+width: 50px;
+height: 50px;
+border-radius: 50%;
+border: none;
+color: white;
+font-size: 20px;
+cursor: pointer;
+box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+display: flex;
+align-items: center;
+justify-content: center;
+transition: all 0.3s;
+}
+.debug-btn:hover {
+transform: scale(1.1);
+}
+/* Notification */
+.notification {
+position: fixed;
+top: 20px;
+right: 20px;
+padding: 12px 24px;
+border-radius: 8px;
+box-shadow: var(--shadow);
+z-index: 10000;
+display: flex;
+align-items: center;
+gap: 12px;
+animation: slideInRight 0.3s ease;
+max-width: 400px;
+}
+.notification.success {
+background-color: var(--secondary-color);
+color: white;
+}
+.notification.error {
+background-color: var(--danger-color);
+color: white;
+}
+.notification.info {
+background-color: var(--primary-color);
+color: white;
+}
+.notification.warning {
+background-color: var(--warning-color);
+color: var(--dark-color);
+}
+@keyframes slideInRight {
+from { transform: translateX(100%); opacity: 0; }
+to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOutRight {
+from { transform: translateX(0); opacity: 1; }
+to { transform: translateX(100%); opacity: 0; }
+}
+/* Comment Content */
+.comment-content {
+max-width: 300px;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+.comment-content.expanded {
+white-space: normal;
+overflow: visible;
+}
+.expand-comment-btn {
+background: none;
+border: none;
+color: var(--primary-color);
+cursor: pointer;
+font-size: 12px;
+margin-left: 5px;
+}
+/* Episode Edit Button */
+.episode-actions {
+display: flex;
+gap: 8px;
+}
+/* Duplicate Warning */
+.duplicate-warning {
+background-color: #fff3cd;
+border: 1px solid #ffc107;
+color: #856404;
+padding: 10px;
+border-radius: 8px;
+margin-top: 10px;
+font-size: 14px;
+display: none;
+}
+/* Responsive */
+@media (max-width: 992px) {
+.admin-main {
+flex-direction: column;
+}
+.admin-sidebar {
+width: 100%;
+border-right: none;
+border-bottom: 1px solid var(--border-color);
+}
+.admin-nav {
+display: flex;
+overflow-x: auto;
+padding-bottom: 5px;
+}
+.admin-nav li {
+margin-bottom: 0;
+flex-shrink: 0;
+}
+.admin-nav a {
+border-left: none;
+border-bottom: 4px solid transparent;
+padding: 15px 20px;
+}
+.admin-nav a.active {
+border-left: none;
+border-bottom: 4px solid var(--primary-color);
+}
+.episode-columns {
+flex-direction: column;
+}
+}
+@media (max-width: 768px) {
+.admin-content {
+padding: 20px;
+}
+.form-row {
+flex-direction: column;
+}
+.form-group {
+min-width: 100%;
+}
+.stats-container {
+grid-template-columns: 1fr;
+}
+.movie-table th:nth-child(3),
+.movie-table td:nth-child(3),
+.comments-table th:nth-child(5),
+.comments-table td:nth-child(5) {
+display: none;
+}
+.backup-actions {
+flex-direction: column;
+}
+.comment-content {
+max-width: 150px;
+}
+.episode-actions {
+flex-direction: column;
+gap: 5px;
+}
+}
+</style>
+</head>
+<body>
+<!-- Login Screen -->
+<div class="login-container" id="loginContainer">
+<div class="login-box">
+<h1><i class="fas fa-lock"></i> Admin Login</h1>
+<p>Đăng nhập vào trang quản trị NguonPhimVIP</p>
+<form class="login-form" id="loginForm">
+<div class="input-group">
+<label for="username">Tài khoản</label>
+<input type="text" id="username" placeholder="Nhập tài khoản" required autocomplete="off">
+</div>
+<div class="input-group">
+<label for="password">Mật khẩu</label>
+<input type="password" id="password" placeholder="Nhập mật khẩu" required autocomplete="off">
+</div>
+<button type="submit" class="login-btn">
+<i class="fas fa-sign-in-alt"></i> Đăng nhập
+</button>
+<div class="error-message" id="errorMessage">
+<i class="fas fa-exclamation-circle"></i> Tài khoản hoặc mật khẩu không đúng!
+</div>
+</form>
+<div style="margin-top: 30px; color: #666; font-size: 14px;">
+<p><i class="fas fa-shield-alt"></i> Hệ thống bảo mật cao cấp</p>
+<p>Liên hệ quản trị viên để được cấp tài khoản</p>
+</div>
+</div>
+</div>
+<!-- Admin Dashboard (hidden by default) -->
+<div class="admin-container" id="adminContainer">
+<!-- Header -->
+<header class="admin-header">
+<h1><i class="fas fa-film"></i> Quản Trị NguonPhimVIP</h1>
+<button class="logout-btn" id="logoutBtn">
+<i class="fas fa-sign-out-alt"></i> Đăng xuất
+</button>
+</header>
+<!-- Main Content -->
+<div class="admin-main">
+<!-- Sidebar -->
+<nav class="admin-sidebar">
+<ul class="admin-nav">
+<li>
+<a href="#" class="active" data-section="dashboard">
+<i class="fas fa-tachometer-alt"></i> Tổng quan
+</a>
+</li>
+<li>
+<a href="#" data-section="add-movie">
+<i class="fas fa-plus-circle"></i> Thêm phim mới
+</a>
+</li>
+<li>
+<a href="#" data-section="manage-movies">
+<i class="fas fa-film"></i> Quản lý phim
+</a>
+</li>
+<li>
+<a href="#" data-section="trending">
+<i class="fas fa-fire"></i> Top Trending
+</a>
+</li>
+<li>
+<a href="#" data-section="episodes">
+<i class="fas fa-list-ol"></i> Quản lý tập phim
+</a>
+</li>
+<li>
+<a href="#" data-section="manage-comments">
+<i class="fas fa-comments"></i> Quản lý bình luận
+</a>
+</li>
+<li>
+<a href="#" data-section="backup">
+<i class="fas fa-database"></i> Sao lưu & Khôi phục
+</a>
+</li>
+</ul>
+</nav>
+<!-- Content Area -->
+<div class="admin-content">
+<!-- Dashboard Section -->
+<section id="dashboard" class="content-section">
+<h2 class="section-title"><i class="fas fa-tachometer-alt"></i> Tổng quan</h2>
+<div class="stats-container">
+<div class="stat-card">
+<div class="stat-icon movies">
+<i class="fas fa-film"></i>
+</div>
+<div class="stat-info">
+<h3 id="totalMovies">0</h3>
+<p>Tổng số phim</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon episodes">
+<i class="fas fa-list-ol"></i>
+</div>
+<div class="stat-info">
+<h3 id="totalEpisodes">0</h3>
+<p>Tổng số tập phim</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon trending">
+<i class="fas fa-fire"></i>
+</div>
+<div class="stat-info">
+<h3 id="trendingMovie">0</h3>
+<p>Phim Trending hiện tại</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon comments">
+<i class="fas fa-comments"></i>
+</div>
+<div class="stat-info">
+<h3 id="totalComments">0</h3>
+<p>Tổng số bình luận</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon backup">
+<i class="fas fa-database"></i>
+</div>
+<div class="stat-info">
+<h3 id="backupStatus">?</h3>
+<p>Trạng thái Firebase</p>
+</div>
+</div>
+</div>
+<div class="form-container">
+<h3 style="margin-bottom: 20px; color: var(--dark-color);">
+<i class="fas fa-info-circle"></i> Hướng dẫn sử dụng
+</h3>
+<ul style="padding-left: 20px; color: var(--gray-color);">
+<li><strong>Thêm phim mới:</strong> Sử dụng mục "Thêm phim mới" để thêm phim vào Firebase</li>
+<li><strong>Quản lý phim:</strong> Có thể chỉnh sửa, xóa phim hoặc thêm tập phim tại mục "Quản lý phim"</li>
+<li><strong>Top Trending:</strong> Chọn phim hiển thị ở vị trí Top 1 Trending trên trang chủ index.html</li>
+<li><strong>Quản lý tập phim:</strong> Thêm, sửa, xóa tập phim cho từng bộ phim</li>
+<li><strong>Quản lý bình luận:</strong> Xem và xóa bình luận của người dùng</li>
+<li><strong>Sao lưu & Khôi phục:</strong> Xuất dữ liệu ra file JSON và nhập dữ liệu từ file JSON</li>
+<li><strong>Dữ liệu:</strong> Tất cả dữ liệu được lưu trữ trên Firebase Cloud Firestore</li>
+<li><strong>⚠️ Lưu ý:</strong> Firebase đang ở chế độ test (cho phép đọc/ghi tự do trong 30 ngày)</li>
+<li><strong>🛡️ Bảo mật mới:</strong> Tất cả thao tác đều được gắn chìa khóa bảo mật và xóa mềm</li>
+<li><strong>🆕 Tính năng mới:</strong> Kiểm tra link trùng khi thêm nhiều tập và chỉnh sửa tên tập</li>
+</ul>
+</div>
+</section>
+<!-- Add Movie Section -->
+<section id="add-movie" class="content-section" style="display: none;">
+<h2 class="section-title"><i class="fas fa-plus-circle"></i> Thêm phim mới</h2>
+<div class="form-container">
+<form id="addMovieForm">
+<div class="form-row">
+<div class="form-group">
+<label for="movieTitle">Tên phim *</label>
+<input type="text" id="movieTitle" placeholder="Nhập tên phim" required>
+</div>
+<div class="form-group">
+<label for="movieCategory">Thể loại *</label>
+<select id="movieCategory" required>
+<option value="">Chọn thể loại</option>
+<option value="Hành động">Hành động</option>
+<option value="Tình cảm">Tình cảm</option>
+<option value="Hài hước">Hài hước</option>
+<option value="Kinh dị">Kinh dị</option>
+<option value="Viễn tưởng">Viễn tưởng</option>
+<option value="Hoạt hình">Hoạt hình</option>
+<option value="Phiêu lưu">Phiêu lưu</option>
+<option value="Khoa học viễn tưởng">Khoa học viễn tưởng</option>
+<option value="Tâm lý">Tâm lý</option>
+<option value="Hình sự">Hình sự</option>
+<option value="Thần thoại">Thần thoại</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="movieDescription">Mô tả phim *</label>
+<textarea id="movieDescription" placeholder="Nhập mô tả phim" required></textarea>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="movieYear">Năm phát hành</label>
+<input type="number" id="movieYear" placeholder="2024" min="1900" max="2030">
+</div>
+<div class="form-group">
+<label for="movieRating">Đánh giá (1-10)</label>
+<input type="number" id="movieRating" placeholder="7.5" min="1" max="10" step="0.1" value="7.5">
+</div>
+<div class="form-group">
+<label for="movieStatus">Trạng thái</label>
+<select id="movieStatus">
+<option value="Đang chiếu">Đang chiếu</option>
+<option value="Hoàn thành">Hoàn thành</option>
+<option value="Sắp chiếu">Sắp chiếu</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="moviePoster">Ảnh poster phim *</label>
+<div class="file-input-container">
+<input type="file" id="moviePoster" accept="image/*">
+<div class="file-input-label">
+<i class="fas fa-cloud-upload-alt"></i>
+<span id="fileLabel">Chọn ảnh từ máy tính</span>
+</div>
+</div>
+<div class="file-preview" id="posterPreview">
+<img src="" alt="Preview" style="width:100%;">
+</div>
+<small>Kích thước đề xuất: 300x450px (hoặc tỷ lệ 2:3)</small>
+<div style="margin-top: 10px;">
+<small>Hoặc nhập URL ảnh:</small>
+<input type="text" id="posterUrl" placeholder="https://example.com/poster.jpg" style="margin-top: 5px;">
+</div>
+</div>
+</div>
+<div class="form-actions">
+<button type="button" class="btn btn-secondary" id="resetForm">
+<i class="fas fa-redo"></i> Đặt lại
+</button>
+<button type="submit" class="btn btn-primary">
+<i class="fas fa-save"></i> Lưu phim
+</button>
+</div>
+</form>
+</div>
+</section>
+<!-- Manage Movies Section -->
+<section id="manage-movies" class="content-section" style="display: none;">
+<h2 class="section-title"><i class="fas fa-film"></i> Quản lý phim</h2>
+<div class="search-box">
+<i class="fas fa-search"></i>
+<input type="text" id="movieSearch" placeholder="Tìm kiếm phim theo tên, thể loại...">
+</div>
+<div class="movie-list-container">
+<div class="table-responsive">
+<table class="movie-table">
+<thead>
+<tr>
+<th>ID</th>
+<th>Poster</th>
+<th>Tên phim</th>
+<th>Thể loại</th>
+<th>Năm</th>
+<th>Trạng thái</th>
+<th>Tập</th>
+<th>Thao tác</th>
+</tr>
+</thead>
+<tbody id="moviesTableBody">
+<tr>
+<td colspan="8" style="text-align: center; padding: 40px; color: var(--gray-color);">
+<i class="fas fa-spinner fa-spin" style="font-size: 36px; margin-bottom: 15px; display: block;"></i>
+Đang tải dữ liệu từ Firebase...
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- Trending Movie Section -->
+<section id="trending" class="content-section" style="display: none;">
+<h2 class="section-title"><i class="fas fa-fire"></i> Quản lý Top Trending</h2>
+<div class="form-container">
+<p style="margin-bottom: 20px; color: var(--gray-color);">
+Phim được chọn sẽ hiển thị ở vị trí Top 1 Trending trên trang chủ index.html
+</p>
+<div class="form-group">
+<label for="trendingSelect">Chọn phim Trending</label>
+<select id="trendingSelect" class="trending-select">
+<option value="">-- Chọn phim --</option>
+</select>
+</div>
+<div class="form-group">
+<label for="trendingSearch">Tìm phim cũ trên KKPhim</label>
+<div style="display: flex; gap: 10px; margin-bottom: 8px;">
+<input type="text" id="trendingSearch" class="form-control" placeholder="Nhập tên phim để đặt Trending" style="flex: 1; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+<button type="button" class="btn btn-secondary" id="trendingSearchBtn">
+<i class="fas fa-search"></i> Tìm
+</button>
+</div>
+<small style="color: var(--gray-color);">Có thể chọn cả phim không nằm trong danh sách 24 phim mới.</small>
+</div>
+<div id="trendingSearchResults" style="margin-top: 10px;"></div>
+<div id="trendingPreview" style="margin-top: 30px; display: none;">
+<h3 style="margin-bottom: 15px; color: var(--dark-color);">Xem trước Trending</h3>
+<div style="display: flex; gap: 20px; align-items: center; background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
+<img id="trendingPreviewImg" src="" alt="Trending Preview" style="width: 120px; height: 160px; object-fit: cover; border-radius: 6px;">
+<div>
+<h3 id="trendingPreviewTitle" style="margin-bottom: 5px;"></h3>
+<p id="trendingPreviewDesc" style="color: var(--gray-color); margin-bottom: 10px;"></p>
+<p><strong>Thể loại:</strong> <span id="trendingPreviewCategory"></span></p>
+<p><strong>Năm:</strong> <span id="trendingPreviewYear"></span></p>
+</div>
+</div>
+</div>
+<div class="form-actions">
+<button type="button" class="btn btn-primary" id="saveTrending">
+<i class="fas fa-check"></i> Lưu Trending
+</button>
+</div>
+</div>
+</section>
+<!-- Episode Management Section -->
+<section id="episodes" class="content-section" style="display: none;">
+<h2 class="section-title"><i class="fas fa-list-ol"></i> Quản lý tập phim</h2>
+<div class="form-container">
+<div class="search-box">
+<i class="fas fa-search"></i>
+<input type="text" id="episodeSearch" placeholder="Tìm kiếm phim...">
+</div>
+<div class="form-group">
+<label for="episodeMovieSelect">Chọn phim</label>
+<select id="episodeMovieSelect" class="episode-movie-select" style="width: 100%; padding: 12px 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+<option value="">-- Chọn phim --</option>
+</select>
+</div>
+<div id="episodeManagement" class="episode-management">
+<h3 style="margin-bottom: 20px; color: var(--dark-color);" id="episodeMovieTitle"></h3>
+<div class="episode-columns">
+<div class="episode-column">
+<h4><i class="fas fa-plus-circle"></i> Thêm tập thủ công</h4>
+<div class="form-row">
+<div class="form-group">
+<label for="episodeNumber">Số tập *</label>
+<input type="number" id="episodeNumber" placeholder="1" min="1" value="1">
+</div>
+<div class="form-group">
+<label for="episodeTitle">Tên tập (tùy chọn)</label>
+<input type="text" id="episodeTitle" placeholder="Tập 1: Khởi đầu">
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="episodeVideo">URL video *</label>
+<input type="text" id="episodeVideo" placeholder="https://www.youtube.com/embed/... hoặc link video">
+</div>
+</div>
+<div class="form-actions">
+<button type="button" class="btn btn-primary" id="addEpisodeBtn">
+<i class="fas fa-plus"></i> Thêm tập
+</button>
+</div>
+</div>
+<div class="episode-column">
+<h4><i class="fas fa-bolt"></i> Thêm nhiều tập nhanh</h4>
+<div class="form-group">
+<label>Mỗi dòng một link video:</label>
+<textarea id="bulkEpisodes" class="bulk-episodes-input" placeholder="https://example.com/video1.mp4
+https://example.com/video2.mp4
+https://example.com/video3.mp4"></textarea>
+<div class="duplicate-warning" id="duplicateWarning">
+<i class="fas fa-exclamation-triangle"></i>
+<span id="duplicateMessage">Đã phát hiện link trùng!</span>
+</div>
+<div class="episode-counter" id="episodeCounter">0 link đã nhập (0 link trùng)</div>
+</div>
+<div class="form-actions">
+<button type="button" class="btn btn-success" id="addBulkEpisodesBtn">
+<i class="fas fa-bolt"></i> Thêm nhiều tập
+</button>
+<button type="button" class="btn btn-secondary" id="checkDuplicatesBtn">
+<i class="fas fa-search"></i> Kiểm tra trùng
+</button>
+</div>
+</div>
+</div>
+<small style="display: block; margin-top: 10px; color: var(--gray-color);">
+📹 Hỗ trợ: YouTube, Vimeo, Dailymotion, Facebook, TikTok, Twitter, Instagram, và link trực tiếp (.mp4, .webm, .m3u8)
+</small>
+<div class="episode-list" id="episodeList">
+<!-- Episodes will be loaded here dynamically -->
+</div>
+</div>
+</div>
+</section>
+<!-- Manage Comments Section -->
+<section id="manage-comments" class="content-section" style="display: none;">
+<h2 class="section-title"><i class="fas fa-comments"></i> Quản lý bình luận</h2>
+<div class="movie-list-container">
+<div class="table-responsive">
+<table class="comments-table">
+<thead>
+<tr>
+<th>STT</th>
+<th>Tên Phim</th>
+<th>Người gửi</th>
+<th>Nội dung</th>
+<th>Thời gian</th>
+<th>Thao tác</th>
+</tr>
+</thead>
+<tbody id="commentsTableBody">
+<tr>
+<td colspan="6" style="text-align: center; padding: 40px; color: var(--gray-color);">
+<i class="fas fa-spinner fa-spin" style="font-size: 36px; margin-bottom: 15px; display: block;"></i>
+Đang tải bình luận từ Firebase...
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- Backup & Restore Section -->
+<section id="backup" class="content-section" style="display: none;">
+<h2 class="section-title"><i class="fas fa-database"></i> Sao lưu & Khôi phục</h2>
+<div class="form-container">
+<div class="backup-info">
+<h3 style="margin-bottom: 10px; color: var(--dark-color);">
+<i class="fas fa-info-circle"></i> Thông tin về sao lưu
+</h3>
+<p style="color: var(--gray-color);">
+Tính năng này cho phép bạn xuất toàn bộ dữ liệu phim ra file JSON để lưu trữ trên máy tính,
+và khôi phục dữ liệu từ file JSON khi cần thiết.
+</p>
+<ul>
+<li>File JSON chứa tất cả thông tin phim, tập phim, bình luận và phim trending</li>
+<li>Bạn có thể chỉnh sửa file JSON bằng trình soạn thảo văn bản</li>
+<li>Luôn sao lưu dữ liệu trước khi thực hiện các thay đổi lớn</li>
+<li>Dữ liệu trong Firebase sẽ bị ghi đè khi khôi phục từ file JSON</li>
+<li><strong>🛡️ Mới:</strong> Dữ liệu được bảo vệ bằng chìa khóa bảo mật và xóa mềm</li>
+<li><strong>🆕 Mới:</strong> Kiểm tra link trùng khi thêm nhiều tập và chỉnh sửa tên tập</li>
+</ul>
+</div>
+<div class="form-row">
+<div class="form-group">
+<h3 style="margin-bottom: 15px; color: var(--dark-color);">
+<i class="fas fa-download"></i> Xuất dữ liệu
+</h3>
+<p style="margin-bottom: 15px; color: var(--gray-color);">
+Tải toàn bộ dữ liệu hiện tại về máy dưới dạng file JSON.
+</p>
+<div class="backup-actions">
+<button class="btn btn-success" id="exportBtn">
+<i class="fas fa-file-export"></i> Xuất file JSON
+</button>
+<button class="btn btn-purple" id="exportPrettyBtn">
+<i class="fas fa-file-code"></i> Xuất JSON đẹp (có định dạng)
+</button>
+</div>
+</div>
+<div class="form-group">
+<h3 style="margin-bottom: 15px; color: var(--dark-color);">
+<i class="fas fa-upload"></i> Nhập dữ liệu
+</h3>
+<p style="margin-bottom: 15px; color: var(--gray-color);">
+Khôi phục dữ liệu từ file JSON. <strong style="color: var(--danger-color);">Cảnh báo: Dữ liệu trong Firebase sẽ bị ghi đè!</strong>
+</p>
+<div class="file-input-container">
+<input type="file" id="importFile" accept=".json">
+<div class="file-input-label">
+<i class="fas fa-cloud-upload-alt"></i>
+<span id="importFileLabel">Chọn file JSON để nhập</span>
+</div>
+</div>
+<div class="backup-actions" style="margin-top: 20px;">
+<button class="btn btn-primary" id="importBtn" disabled>
+<i class="fas fa-file-import"></i> Nhập dữ liệu
+</button>
+<button class="btn btn-secondary" id="resetDataBtn">
+<i class="fas fa-trash"></i> Xóa toàn bộ dữ liệu
+</button>
+</div>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<h3 style="margin-bottom: 15px; color: var(--dark-color);">
+<i class="fas fa-code"></i> Xem dữ liệu hiện tại
+</h3>
+<p style="margin-bottom: 15px; color: var(--gray-color);">
+Xem dữ liệu JSON hiện tại trong trình duyệt (không tải về).
+</p>
+<div class="backup-actions">
+<button class="btn btn-secondary" id="viewDataBtn">
+<i class="fas fa-eye"></i> Xem dữ liệu JSON
+</button>
+<button class="btn btn-secondary" id="copyDataBtn">
+<i class="fas fa-copy"></i> Copy JSON
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+<!-- Modal for Edit Movie -->
+<div class="modal" id="editMovieModal">
+<div class="modal-content">
+<span class="close-modal" id="closeEditModal">&times;</span>
+<h2 style="margin-bottom: 20px; color: var(--primary-color);">
+<i class="fas fa-edit"></i> Chỉnh sửa phim
+</h2>
+<form id="editMovieForm">
+<input type="hidden" id="editMovieId">
+<div class="form-row">
+<div class="form-group">
+<label for="editMovieTitle">Tên phim *</label>
+<input type="text" id="editMovieTitle" required>
+</div>
+<div class="form-group">
+<label for="editMovieCategory">Thể loại *</label>
+<select id="editMovieCategory" required>
+<option value="">Chọn thể loại</option>
+<option value="Hành động">Hành động</option>
+<option value="Tình cảm">Tình cảm</option>
+<option value="Hài hước">Hài hước</option>
+<option value="Kinh dị">Kinh dị</option>
+<option value="Viễn tưởng">Viễn tưởng</option>
+<option value="Hoạt hình">Hoạt hình</option>
+<option value="Phiêu lưu">Phiêu lưu</option>
+<option value="Khoa học viễn tưởng">Khoa học viễn tưởng</option>
+<option value="Tâm lý">Tâm lý</option>
+<option value="Hình sự">Hình sự</option>
+<option value="Thần thoại">Thần thoại</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="editMovieDescription">Mô tả phim *</label>
+<textarea id="editMovieDescription" required></textarea>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="editMovieYear">Năm phát hành</label>
+<input type="number" id="editMovieYear" min="1900" max="2030">
+</div>
+<div class="form-group">
+<label for="editMovieRating">Đánh giá (1-10)</label>
+<input type="number" id="editMovieRating" min="1" max="10" step="0.1">
+</div>
+<div class="form-group">
+<label for="editMovieStatus">Trạng thái</label>
+<select id="editMovieStatus">
+<option value="Đang chiếu">Đang chiếu</option>
+<option value="Hoàn thành">Hoàn thành</option>
+<option value="Sắp chiếu">Sắp chiếu</option>
+</select>
+</div>
+</div>
+<div class="form-actions">
+<button type="button" class="btn btn-secondary" id="cancelEdit">
+Hủy
+</button>
+<button type="submit" class="btn btn-primary">
+<i class="fas fa-save"></i> Cập nhật
+</button>
+</div>
+</form>
+</div>
+</div>
+<!-- Modal for Edit Episode -->
+<div class="modal" id="editEpisodeModal">
+<div class="modal-content">
+<span class="close-modal" id="closeEditEpisodeModal">&times;</span>
+<h2 style="margin-bottom: 20px; color: var(--primary-color);">
+<i class="fas fa-edit"></i> Chỉnh sửa tập phim
+</h2>
+<form id="editEpisodeForm">
+<input type="hidden" id="editEpisodeMovieId">
+<input type="hidden" id="editEpisodeId">
+<div class="form-row">
+<div class="form-group">
+<label for="editEpisodeNumber">Số tập *</label>
+<input type="number" id="editEpisodeNumber" placeholder="1" min="1" required>
+</div>
+<div class="form-group">
+<label for="editEpisodeTitle">Tên tập</label>
+<input type="text" id="editEpisodeTitle" placeholder="Tập 1: Tên tập">
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="editEpisodeVideoUrl">URL video *</label>
+<input type="text" id="editEpisodeVideoUrl" placeholder="https://www.youtube.com/embed/..." required>
+</div>
+</div>
+<div class="form-actions">
+<button type="button" class="btn btn-secondary" id="cancelEditEpisode">
+Hủy
+</button>
+<button type="submit" class="btn btn-primary">
+<i class="fas fa-save"></i> Cập nhật tập
+</button>
+</div>
+</form>
+</div>
+</div>
+<!-- Modal for View JSON Data -->
+<div class="modal" id="viewDataModal">
+<div class="modal-content" style="max-width: 800px;">
+<span class="close-modal" id="closeViewDataModal">&times;</span>
+<h2 style="margin-bottom: 20px; color: var(--primary-color);">
+<i class="fas fa-code"></i> Dữ liệu JSON hiện tại
+</h2>
+<div style="margin-bottom: 20px;">
+<p style="color: var(--gray-color); margin-bottom: 10px;">
+Dữ liệu JSON bao gồm tất cả phim, bình luận và phim trending. Bạn có thể copy toàn bộ nội dung này.
+</p>
+</div>
+<div style="background-color: #f5f5f5; border-radius: 8px; padding: 20px; max-height: 400px; overflow: auto;">
+<pre id="jsonDataPreview" style="white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px;"></pre>
+</div>
+<div class="form-actions" style="margin-top: 20px;">
+<button type="button" class="btn btn-secondary" id="closeViewDataBtn">
+Đóng
+</button>
+<button type="button" class="btn btn-primary" id="copyJsonBtn">
+<i class="fas fa-copy"></i> Copy JSON
+</button>
+</div>
+</div>
+</div>
+<!-- Debug Panel -->
+<div class="debug-panel">
+<button class="debug-btn" id="debugBtn" style="background-color: #ff4081;" title="Debug">
+<i class="fas fa-bug"></i>
+</button>
+<button class="debug-btn" id="reloadBtn" style="background-color: #1a73e8;" title="Reload Data">
+<i class="fas fa-sync-alt"></i>
+</button>
+<button class="debug-btn" id="exportDebugBtn" style="background-color: #34a853;" title="Export Data">
+<i class="fas fa-download"></i>
+</button>
+<button class="debug-btn" id="testFirebaseBtn" style="background-color: #ff9800;" title="Test Firebase">
+<i class="fas fa-database"></i>
+</button>
+</div>
+<script>
+// ==================== GLOBAL VARIABLES ====================
+const ADMIN_CREDENTIALS = {
+username: "0787867993",
+password: "Taidayne22@8",
+key: "Taidayne22@8"
+};
+let movies = []; // Cache gốc, không thay đổi khi search (từ KKPhim API)
+let trendingMovie = null;
+let comments = [];
+let allMoviesCache = []; // Cache toàn bộ phim từ KKPhim API
+let lastTrendingSearchResults = [];
+// Admin preferences (lưu trong localStorage vì không thể edit API bên thứ ba)
+let adminPreferences = JSON.parse(localStorage.getItem('nguonphimvip_admin_prefs')) || {
+favoriteMovies: [],
+hiddenMovies: [],
+trendingMovieSlug: null
+};
+// ==================== DOM ELEMENTS ====================
+// Login elements
+const loginContainer = document.getElementById('loginContainer');
+const adminContainer = document.getElementById('adminContainer');
+const loginForm = document.getElementById('loginForm');
+const errorMessage = document.getElementById('errorMessage');
+const logoutBtn = document.getElementById('logoutBtn');
+// Navigation elements
+const navLinks = document.querySelectorAll('.admin-nav a');
+const contentSections = document.querySelectorAll('.content-section');
+// Dashboard elements
+const totalMoviesEl = document.getElementById('totalMovies');
+const totalEpisodesEl = document.getElementById('totalEpisodes');
+const trendingMovieEl = document.getElementById('trendingMovie');
+const totalCommentsEl = document.getElementById('totalComments');
+const backupStatusEl = document.getElementById('backupStatus');
+// Add movie elements
+const addMovieForm = document.getElementById('addMovieForm');
+const moviePosterInput = document.getElementById('moviePoster');
+const fileLabel = document.getElementById('fileLabel');
+const posterPreview = document.getElementById('posterPreview');
+const resetFormBtn = document.getElementById('resetForm');
+const posterUrlInput = document.getElementById('posterUrl');
+// Manage movies elements
+const moviesTableBody = document.getElementById('moviesTableBody');
+const movieSearchInput = document.getElementById('movieSearch');
+// Trending elements
+const trendingSelect = document.getElementById('trendingSelect');
+const saveTrendingBtn = document.getElementById('saveTrending');
+const trendingSearchInput = document.getElementById('trendingSearch');
+const trendingSearchBtn = document.getElementById('trendingSearchBtn');
+const trendingSearchResults = document.getElementById('trendingSearchResults');
+const trendingPreview = document.getElementById('trendingPreview');
+const trendingPreviewImg = document.getElementById('trendingPreviewImg');
+const trendingPreviewTitle = document.getElementById('trendingPreviewTitle');
+const trendingPreviewDesc = document.getElementById('trendingPreviewDesc');
+const trendingPreviewCategory = document.getElementById('trendingPreviewCategory');
+const trendingPreviewYear = document.getElementById('trendingPreviewYear');
+// Episode elements
+const episodeSearch = document.getElementById('episodeSearch');
+const episodeMovieSelect = document.getElementById('episodeMovieSelect');
+const episodeManagement = document.getElementById('episodeManagement');
+const episodeMovieTitle = document.getElementById('episodeMovieTitle');
+const addEpisodeBtn = document.getElementById('addEpisodeBtn');
+const episodeList = document.getElementById('episodeList');
+const bulkEpisodes = document.getElementById('bulkEpisodes');
+const addBulkEpisodesBtn = document.getElementById('addBulkEpisodesBtn');
+const episodeCounter = document.getElementById('episodeCounter');
+const duplicateWarning = document.getElementById('duplicateWarning');
+const duplicateMessage = document.getElementById('duplicateMessage');
+const checkDuplicatesBtn = document.getElementById('checkDuplicatesBtn');
+// Comments elements
+const commentsTableBody = document.getElementById('commentsTableBody');
+// Backup elements
+const exportBtn = document.getElementById('exportBtn');
+const exportPrettyBtn = document.getElementById('exportPrettyBtn');
+const importFileInput = document.getElementById('importFile');
+const importFileLabel = document.getElementById('importFileLabel');
+const importBtn = document.getElementById('importBtn');
+const resetDataBtn = document.getElementById('resetDataBtn');
+const viewDataBtn = document.getElementById('viewDataBtn');
+const copyDataBtn = document.getElementById('copyDataBtn');
+// Modal elements
+const editMovieModal = document.getElementById('editMovieModal');
+const closeEditModal = document.getElementById('closeEditModal');
+const cancelEdit = document.getElementById('cancelEdit');
+const editMovieForm = document.getElementById('editMovieForm');
+const editEpisodeModal = document.getElementById('editEpisodeModal');
+const closeEditEpisodeModal = document.getElementById('closeEditEpisodeModal');
+const cancelEditEpisode = document.getElementById('cancelEditEpisode');
+const editEpisodeForm = document.getElementById('editEpisodeForm');
+const viewDataModal = document.getElementById('viewDataModal');
+const closeViewDataModal = document.getElementById('closeViewDataModal');
+const closeViewDataBtn = document.getElementById('closeViewDataBtn');
+const jsonDataPreview = document.getElementById('jsonDataPreview');
+const copyJsonBtn = document.getElementById('copyJsonBtn');
+// Debug elements
+const debugBtn = document.getElementById('debugBtn');
+const reloadBtn = document.getElementById('reloadBtn');
+const exportDebugBtn = document.getElementById('exportDebugBtn');
+const testFirebaseBtn = document.getElementById('testFirebaseBtn');
+// ==================== UTILITY FUNCTIONS ====================
+// Generate unique ID
+function generateId() {
+return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+// Debounce function
+function debounce(func, wait) {
+let timeout;
+return function executedFunction(...args) {
+const later = () => {
+clearTimeout(timeout);
+func(...args);
+};
+clearTimeout(timeout);
+timeout = setTimeout(later, wait);
+};
+}
+// Show notification
+function showNotification(message, type = 'info') {
+document.querySelectorAll('.notification').forEach(notification => {
+notification.remove();
+});
+const notification = document.createElement('div');
+notification.className = `notification ${type}`;
+notification.innerHTML = `
+<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+<span>${message}</span>
+`;
+document.body.appendChild(notification);
+setTimeout(() => {
+notification.style.animation = 'slideOutRight 0.3s ease';
+setTimeout(() => {
+if (notification.parentNode) {
+notification.parentNode.removeChild(notification);
+}
+}, 300);
+}, 3000);
+}
+// Function to remove Vietnamese diacritics for search
+function removeVietnameseDiacritics(str) {
+return str.normalize('NFD')
+.replace(/[\u0300-\u036f]/g, '')
+.replace(/đ/g, 'd').replace(/Đ/g, 'D')
+.toLowerCase();
+}
+// Update statistics on dashboard
+function updateStats() {
+const totalMovies = movies.length;
+const totalEpisodes = movies.reduce((total, movie) => {
+return total + (movie.episodes ? movie.episodes.length : 0);
+}, 0);
+totalMoviesEl.textContent = totalMovies;
+totalEpisodesEl.textContent = totalEpisodes;
+trendingMovieEl.textContent = trendingMovie ? 1 : 0;
+totalCommentsEl.textContent = comments.length;
+backupStatusEl.textContent = movies.length > 0 ? '✓' : '✗';
+backupStatusEl.style.color = movies.length > 0 ? '#34a853' : '#ea4335';
+}
+// Render dropdown phim cho phần quản lý tập phim - FIXED VERSION (Updated to use slug)
+function renderEpisodeMovieDropdown(movieList = []) {
+if (!episodeMovieSelect) return;
+// Lưu giá trị đang chọn
+const currentValue = episodeMovieSelect.value;
+// Xóa tất cả option (trừ option đầu tiên)
+const options = episodeMovieSelect.querySelectorAll('option:not(:first-child)');
+options.forEach(option => option.remove());
+// Nếu danh sách phim rỗng hoặc không có
+if (!movieList || movieList.length === 0) {
+// Hiển thị thông báo không có phim
+const emptyOption = document.createElement('option');
+emptyOption.value = '';
+emptyOption.textContent = '-- Không tìm thấy phim nào --';
+emptyOption.disabled = true;
+emptyOption.selected = true;
+episodeMovieSelect.appendChild(emptyOption);
+episodeManagement.style.display = 'none';
+return;
+}
+// Thêm phim vào dropdown (use slug instead of id)
+movieList.forEach(movie => {
+const option = document.createElement('option');
+option.value = movie.slug || movie.id;
+option.textContent = movie.title;
+option.setAttribute('data-search', removeVietnameseDiacritics(movie.title));
+episodeMovieSelect.appendChild(option);
+});
+// Khôi phục lựa chọn nếu vẫn tồn tại trong danh sách
+if (currentValue && movieList.some(movie => (movie.slug === currentValue || movie.id === currentValue))) {
+episodeMovieSelect.value = currentValue;
+// Tự động load tập phim nếu có phim được chọn
+loadEpisodes(currentValue);
+} else {
+episodeManagement.style.display = 'none';
+}
+}
+// Load movies into dropdowns with search
+function loadMovieDropdowns() {
+// Clear existing options except first one
+const trendingOptions = trendingSelect.querySelectorAll('option:not(:first-child)');
+trendingOptions.forEach(option => option.remove());
+// Add movies to trending dropdown (use slug instead of id)
+movies.forEach(movie => {
+const trendingOption = document.createElement('option');
+trendingOption.value = movie.slug || movie.id;
+trendingOption.textContent = movie.title;
+const currentTrendingSlug = adminPreferences.trendingMovieSlug;
+if (trendingMovie && (trendingMovie.slug === movie.slug || trendingMovie.id === movie.id) ||
+currentTrendingSlug && (movie.slug === currentTrendingSlug || movie.id === currentTrendingSlug)) {
+trendingOption.selected = true;
+updateTrendingPreview(movie);
+}
+trendingSelect.appendChild(trendingOption);
+});
+// Render episode dropdown
+renderEpisodeMovieDropdown(movies);
+// Lưu cache gốc
+allMoviesCache = [...movies];
+}
+// Update trending preview
+function updateTrendingPreview(movie) {
+if (!movie) return;
+trendingPreview.style.display = 'block';
+const posterUrl = convertImageToWebP(movie.poster || 'https://via.placeholder.com/120x160?text=No+Image');
+trendingPreviewImg.src = posterUrl;
+trendingPreviewImg.onerror = function() {
+this.src = 'https://via.placeholder.com/120x160?text=No+Image';
+};
+trendingPreviewTitle.textContent = movie.title;
+trendingPreviewDesc.textContent = movie.description ? (movie.description.substring(0, 100) + (movie.description.length > 100 ? '...' : '')) : 'Không có mô tả';
+trendingPreviewCategory.textContent = movie.category || 'N/A';
+trendingPreviewYear.textContent = movie.year || 'N/A';
+}
+// Load movies into table with search functionality
+function loadMoviesTable() {
+moviesTableBody.innerHTML = '';
+if (movies.length === 0) {
+moviesTableBody.innerHTML = `
+<tr>
+<td colspan="8" style="text-align: center; padding: 40px; color: var(--gray-color);">
+<i class="fas fa-film" style="font-size: 48px; margin-bottom: 15px; display: block; color: #ddd;"></i>
+Chưa có phim nào. Hãy thêm phim mới!
+</td>
+</tr>
+`;
+return;
+}
+movies.forEach((movie, index) => {
+const row = document.createElement('tr');
+const posterUrl = convertImageToWebP(movie.poster || '');
+const movieSlug = movie.slug || movie.id;
+row.innerHTML = `
+<td>${index + 1}</td>
+<td>
+<img class="movie-poster" src="${posterUrl || 'https://via.placeholder.com/80x100?text=No+Image'}"
+alt="${movie.title}"
+onerror="this.src='https://via.placeholder.com/80x100?text=No+Image'">
+</td>
+<td><strong>${movie.title}</strong></td>
+<td>${movie.category || 'N/A'}</td>
+<td>${movie.year || 'N/A'}</td>
+<td><span class="status-badge">${movie.status || 'Đang chiếu'}</span></td>
+<td>${movie.episodes ? movie.episodes.length : 0}</td>
+<td class="actions-cell">
+<button class="action-btn edit-btn" data-slug="${movieSlug}" title="Xem chi tiết (API chỉ đọc)">
+<i class="fas fa-eye"></i>
+</button>
+<button class="action-btn episode-btn" data-slug="${movieSlug}" title="Xem tập phim">
+<i class="fas fa-list-ol"></i>
+</button>
+<button class="action-btn delete-btn" data-slug="${movieSlug}" title="Ẩn khỏi danh sách (localStorage)">
+<i class="fas fa-eye-slash"></i>
+</button>
+</td>
+`;
+row.setAttribute('data-search', removeVietnameseDiacritics(movie.title + ' ' + (movie.category || '')));
+moviesTableBody.appendChild(row);
+});
+// Add event listeners to action buttons
+document.querySelectorAll('.edit-btn').forEach(btn => {
+btn.addEventListener('click', function() {
+const movieSlug = this.getAttribute('data-slug');
+// Mở trang chi tiết phim (không thể edit vì API chỉ đọc)
+window.open(`movie.html?slug=${movieSlug}`, '_blank');
+});
+});
+document.querySelectorAll('.delete-btn').forEach(btn => {
+btn.addEventListener('click', function() {
+const movieSlug = this.getAttribute('data-slug');
+// Ẩn phim khỏi danh sách (lưu trong localStorage)
+if (confirm('⚠️ Bạn muốn ẩn phim này khỏi danh sách? (Lưu trong localStorage)')) {
+hideMovieFromList(movieSlug);
+}
+});
+});
+document.querySelectorAll('.episode-btn').forEach(btn => {
+btn.addEventListener('click', function() {
+const movieSlug = this.getAttribute('data-slug');
+switchSection('episodes');
+episodeMovieSelect.value = movieSlug;
+episodeMovieSelect.dispatchEvent(new Event('change'));
+});
+});
+// Apply initial search if there's a search term
+if (movieSearchInput.value.trim()) {
+filterMoviesTable(movieSearchInput.value.trim());
+}
+}
+// Filter movies table based on search input
+function filterMoviesTable(searchTerm) {
+const rows = moviesTableBody.querySelectorAll('tr');
+const searchTermNormalized = removeVietnameseDiacritics(searchTerm.toLowerCase());
+let visibleCount = 0;
+rows.forEach(row => {
+const searchData = row.getAttribute('data-search') || '';
+if (searchData.includes(searchTermNormalized) || searchTermNormalized === '') {
+row.style.display = '';
+visibleCount++;
+} else {
+row.style.display = 'none';
+}
+});
+// Show message if no results
+if (visibleCount === 0 && searchTerm !== '') {
+// Check if no results row already exists
+if (!moviesTableBody.querySelector('.no-results-row')) {
+const noResultsRow = document.createElement('tr');
+noResultsRow.className = 'no-results-row';
+noResultsRow.innerHTML = `
+<td colspan="8" style="text-align: center; padding: 40px; color: var(--gray-color);">
+<i class="fas fa-search" style="font-size: 48px; margin-bottom: 15px; display: block; color: #ddd;"></i>
+Không tìm thấy phim nào phù hợp với từ khóa: "${searchTerm}"
+</td>
+`;
+moviesTableBody.appendChild(noResultsRow);
+}
+} else {
+// Remove no results message if present
+const noResultsRow = moviesTableBody.querySelector('.no-results-row');
+if (noResultsRow) {
+noResultsRow.remove();
+}
+}
+}
+// Load episodes for a movie (from API)
+async function loadEpisodes(movieSlug) {
+episodeList.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+try {
+// Find movie in cache first
+let movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+// If not found or episodes not loaded, fetch from API
+if (!movie || !movie.episodes || movie.episodes.length === 0) {
+const movieData = await fetchKKPhimAPI(`${KKPHIM_API_BASE}/phim/${movieSlug}`);
+if (movieData && movieData.movie) {
+movie = mapKKPhimMovieToLocal(movieData.movie);
+// Update in cache
+const cacheIndex = movies.findIndex(m => m.slug === movieSlug || m.id === movieSlug);
+if (cacheIndex !== -1) {
+movies[cacheIndex] = movie;
+}
+}
+}
+episodeList.innerHTML = '';
+if (!movie) {
+episodeList.innerHTML = `<div style="text-align: center; padding: 30px; color: var(--gray-color);">Không tìm thấy phim</div>`;
+return;
+}
+episodeMovieTitle.textContent = `Xem tập phim: ${movie.title} (API chỉ đọc)`;
+if (!movie.episodes || movie.episodes.length === 0) {
+episodeList.innerHTML = `
+<div style="text-align: center; padding: 30px; color: var(--gray-color);">
+<i class="fas fa-list-ol" style="font-size: 36px; margin-bottom: 10px; display: block; color: #ddd;"></i>
+Chưa có tập phim nào.
+</div>
+`;
+return;
+}
+// Sort episodes by episode number
+const sortedEpisodes = [...movie.episodes].sort((a, b) => a.episodeNumber - b.episodeNumber);
+sortedEpisodes.forEach((episode) => {
+const episodeItem = document.createElement('div');
+episodeItem.className = 'episode-item';
+episodeItem.innerHTML = `
+<div>
+<strong>Tập ${episode.episodeNumber}</strong>
+${episode.title ? `: ${episode.title}` : ''}
+<div style="font-size: 14px; color: var(--gray-color); margin-top: 5px;">
+${episode.videoUrl ? episode.videoUrl.substring(0, 50) + (episode.videoUrl.length > 50 ? '...' : '') : 'Không có URL'}
+</div>
+</div>
+<div class="episode-actions">
+<button class="action-btn edit-btn edit-episode-btn"
+data-movie-slug="${movieSlug}"
+data-episode-id="${episode.id}"
+title="Xem chi tiết (API chỉ đọc)">
+<i class="fas fa-eye"></i>
+</button>
+</div>
+`;
+episodeList.appendChild(episodeItem);
+});
+// Add event listeners - chỉ xem, không thể edit
+document.querySelectorAll('.edit-episode-btn').forEach(btn => {
+btn.addEventListener('click', function() {
+showNotification('⚠️ Không thể chỉnh sửa. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+});
+});
+} catch (error) {
+console.error('❌ Lỗi khi load episodes:', error);
+episodeList.innerHTML = `
+<div style="text-align: center; padding: 30px; color: var(--gray-color);">
+<i class="fas fa-exclamation-triangle"></i>
+<p>Lỗi khi tải tập phim</p>
+</div>
+`;
+}
+}
+// Check for duplicate links in bulk episodes
+function checkDuplicateLinks() {
+// Get selected movie slug from select
+const movieSlug = episodeMovieSelect.value;
+if (!movieSlug) return { unique: 0, duplicate: 0, total: 0 };
+// Find movie by slug or id
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie || !movie.episodes) return { unique: 0, duplicate: 0, total: 0 };
+const lines = bulkEpisodes.value.split('\n')
+.filter(line => line.trim() !== '')
+.map(line => line.trim());
+const existingUrls = movie.episodes.map(ep => ep.videoUrl);
+const duplicateUrls = lines.filter(url => existingUrls.includes(url));
+const uniqueUrls = lines.filter(url => !existingUrls.includes(url));
+return {
+unique: uniqueUrls.length,
+duplicate: duplicateUrls.length,
+total: lines.length,
+duplicateUrls: duplicateUrls
+};
+}
+// Update episode counter with duplicate info
+function updateEpisodeCounter() {
+const result = checkDuplicateLinks();
+episodeCounter.textContent = `${result.total} link đã nhập (${result.duplicate} link trùng)`;
+if (result.duplicate > 0) {
+duplicateWarning.style.display = 'block';
+duplicateMessage.textContent = `Đã phát hiện ${result.duplicate} link trùng với tập đã có: ${result.duplicateUrls.slice(0, 3).join(', ')}${result.duplicateUrls.length > 3 ? '...' : ''}`;
+} else {
+duplicateWarning.style.display = 'none';
+}
+}
+async function loadCommentsFromFirebase() {
+try {
+const db = firebase.firestore();
+const querySnapshot = await db.collection("comments")
+.orderBy("timestamp", "desc")
+.get();
+comments = [];
+querySnapshot.forEach((doc) => {
+const commentData = doc.data();
+comments.push({
+id: doc.id,
+...commentData
+});
+});
+loadCommentsTable();
+updateStats();
+return true;
+} catch (error) {
+console.error('❌ Lỗi tải bình luận từ Firebase:', error);
+showNotification('❌ Lỗi tải bình luận từ Firebase!', 'error');
+return false;
+}
+}
+// Load comments into table
+function loadCommentsTable() {
+commentsTableBody.innerHTML = '';
+if (comments.length === 0) {
+commentsTableBody.innerHTML = `
+<tr>
+<td colspan="6" style="text-align: center; padding: 40px; color: var(--gray-color);">
+<i class="fas fa-comments" style="font-size: 48px; margin-bottom: 15px; display: block; color: #ddd;"></i>
+Chưa có bình luận nào.
+</td>
+</tr>
+`;
+return;
+}
+comments.forEach((comment, index) => {
+const row = document.createElement('tr');
+// Find movie title from movieId
+const movie = movies.find(m => m.id === comment.movieId);
+const movieTitle = movie ? movie.title : `ID: ${comment.movieId}`;
+// Format time
+let timeString = 'N/A';
+if (comment.timestamp) {
+try {
+const date = comment.timestamp.toDate ? comment.timestamp.toDate() : new Date(comment.timestamp);
+timeString = date.toLocaleString('vi-VN');
+} catch (e) {
+console.error('Lỗi định dạng thời gian:', e);
+}
+}
+// Create comment content with expand feature
+const commentId = `comment-${index}`;
+const shortContent = comment.content && comment.content.length > 50 ? comment.content.substring(0, 50) + '...' : comment.content;
+row.innerHTML = `
+<td>${index + 1}</td>
+<td>${movieTitle}</td>
+<td>${comment.userName || 'Ẩn danh'}</td>
+<td>
+<div class="comment-content" id="${commentId}">
+${shortContent || 'Không có nội dung'}
+</div>
+${comment.content && comment.content.length > 50 ?
+`<button class="expand-comment-btn" data-target="${commentId}">Xem thêm</button>` :
+''}
+</td>
+<td>${timeString}</td>
+<td class="actions-cell">
+<button class="action-btn delete-btn delete-comment-btn" data-id="${comment.id}" title="Xóa bình luận">
+<i class="fas fa-trash"></i>
+</button>
+</td>
+`;
+commentsTableBody.appendChild(row);
+});
+// Add event listeners to delete comment buttons
+document.querySelectorAll('.delete-comment-btn').forEach(btn => {
+btn.addEventListener('click', function() {
+const commentId = this.getAttribute('data-id');
+if (confirm('⚠️ Bạn có chắc chắn muốn xóa bình luận này vĩnh viễn?')) {
+deleteComment(commentId);
+}
+});
+});
+// Add event listeners to expand comment buttons
+document.querySelectorAll('.expand-comment-btn').forEach(btn => {
+btn.addEventListener('click', function() {
+const targetId = this.getAttribute('data-target');
+const contentElement = document.getElementById(targetId);
+if (contentElement) {
+if (contentElement.classList.contains('expanded')) {
+// Collapse
+const commentIndex = parseInt(targetId.split('-')[1]);
+const comment = comments[commentIndex];
+const shortContent = comment.content && comment.content.length > 50 ?
+comment.content.substring(0, 50) + '...' :
+comment.content;
+contentElement.textContent = shortContent || 'Không có nội dung';
+contentElement.classList.remove('expanded');
+this.textContent = 'Xem thêm';
+} else {
+// Expand
+const commentIndex = parseInt(targetId.split('-')[1]);
+const comment = comments[commentIndex];
+contentElement.textContent = comment.content || 'Không có nội dung';
+contentElement.classList.add('expanded');
+this.textContent = 'Thu gọn';
+}
+}
+});
+});
+}
+// ==================== KKPHIM API FUNCTIONS ====================
+// Load all movies from KKPhim API
+async function loadMoviesFromFirebase() {
+try {
+showNotification('🔄 Đang tải dữ liệu từ KKPhim API...', 'info');
+// Load phim mới cập nhật từ API V3
+const response = await fetchKKPhimAPI(`${KKPHIM_API_BASE}/danh-sach/phim-moi-cap-nhat-v3?page=1`);
+const moviesData = response.items || response.data || [];
+movies = moviesData.map(movie => mapKKPhimMovieToLocal(movie));
+
+// Lưu cache gốc
+allMoviesCache = [...movies];
+
+// Load trending movie từ admin preferences (localStorage)
+const trendingSlug = adminPreferences.trendingMovieSlug;
+if (trendingSlug) {
+trendingMovie = movies.find(m => m.slug === trendingSlug || m.id === trendingSlug) || null;
+} else if (movies.length > 0) {
+// Default: phim đầu tiên
+trendingMovie = movies[0];
+}
+
+updateStats();
+loadMovieDropdowns();
+loadMoviesTable();
+showNotification(`✅ Đã tải ${movies.length} phim từ KKPhim API`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi tải từ KKPhim API:', error);
+showNotification('❌ Lỗi kết nối KKPhim API!', 'error');
+return false;
+}
+}
+
+async function searchTrendingFromAPI() {
+if (!trendingSearchInput) return;
+const query = trendingSearchInput.value.trim();
+if (!query) {
+showNotification('Vui lòng nhập tên phim để tìm Trending!', 'error');
+return;
+}
+try {
+showNotification(`🔍 Đang tìm "${query}" trên KKPhim...`, 'info');
+trendingSearchResults.innerHTML = '<p style="color: var(--gray-color); padding: 8px 0;">Đang tìm kiếm...</p>';
+const response = await fetchKKPhimAPI(`${KKPHIM_API_BASE}/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&page=1&limit=20`);
+const data = response.data || response;
+const items = Array.isArray(data.items) ? data.items : [];
+lastTrendingSearchResults = items.map(movie => mapKKPhimMovieToLocal(movie));
+if (lastTrendingSearchResults.length === 0) {
+trendingSearchResults.innerHTML = `<p style="color: var(--gray-color); padding: 8px 0;">Không tìm thấy phim phù hợp với "${query}"</p>`;
+return;
+}
+trendingSearchResults.innerHTML = lastTrendingSearchResults.map(movie => {
+const posterUrl = convertImageToWebP(movie.poster || '');
+const safeTitle = movie.title || '';
+const safeCategory = movie.category || 'N/A';
+const safeYear = movie.year || 'N/A';
+return `
+<div class="trending-result-item" data-slug="${movie.slug || movie.id}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;border:1px solid var(--border-color);margin-bottom:6px;cursor:pointer;background:#f9fafb;">
+<img src="${posterUrl || 'https://via.placeholder.com/40x56?text=No'}" alt="${safeTitle}" style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
+<div>
+<div style="font-weight:600;color:#111827;font-size:14px;">${safeTitle}</div>
+<div style="font-size:12px;color:#6b7280;">${safeCategory} • ${safeYear}</div>
+</div>
+</div>
+`;
+}).join('');
+Array.from(trendingSearchResults.querySelectorAll('.trending-result-item')).forEach(item => {
+item.addEventListener('click', async function() {
+const slug = this.getAttribute('data-slug');
+const movie = lastTrendingSearchResults.find(m => m.slug === slug || m.id === slug) || null;
+const success = await setTrendingMovie(slug, movie || undefined);
+if (success && movie) {
+updateTrendingPreview(movie);
+if (!movies.some(m => m.slug === movie.slug || m.id === movie.id)) {
+movies.push(movie);
+allMoviesCache.push(movie);
+loadMovieDropdowns();
+loadMoviesTable();
+}
+}
+});
+});
+} catch (error) {
+console.error('❌ Lỗi tìm kiếm Trending:', error);
+trendingSearchResults.innerHTML = '<p style="color: var(--danger-color); padding: 8px 0;">Lỗi khi tìm kiếm phim Trending</p>';
+showNotification('❌ Lỗi khi tìm kiếm phim Trending!', 'error');
+}
+}
+
+// ==================== FIRESTORE FUNCTIONS (COMMENTED OUT - USING KKPHIM API NOW) ====================
+/* 
+async function loadMoviesFromFirebaseOld() {
+try {
+showNotification('🔄 Đang tải dữ liệu từ Firebase...', 'info');
+const db = firebase.firestore();
+const querySnapshot = await db.collection("movies")
+.where("isDeleted", "!=", true)
+.get();
+movies = [];
+querySnapshot.forEach((doc) => {
+const movieData = doc.data();
+if (movieData.episodes && Array.isArray(movieData.episodes)) {
+movieData.episodes = movieData.episodes.map(ep => ({
+...ep,
+id: ep.id || `${movieData.id}-ep-${ep.episodeNumber}`
+}));
+}
+movies.push(movieData);
+});
+allMoviesCache = [...movies];
+const trendingDoc = await db.collection("trending").doc("current").get();
+if (trendingDoc.exists) {
+const trendingData = trendingDoc.data();
+trendingMovie = movies.find(m => m.id === trendingData.movieId) || null;
+}
+updateStats();
+loadMovieDropdowns();
+loadMoviesTable();
+showNotification(`✅ Đã tải ${movies.length} phim từ Firebase`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi tải từ Firebase:', error);
+showNotification('❌ Lỗi kết nối Firebase!', 'error');
+return false;
+}
+}
+*/
+// Add movie - DISABLED (Cannot edit third-party API)
+async function addMovieToFirebase(movieData) {
+showNotification('⚠️ Không thể thêm phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return false;
+}
+
+// ==================== ADD MOVIE TO FIREBASE (COMMENTED OUT - CANNOT EDIT API) ====================
+/* 
+async function addMovieToFirebaseOld(movieData) {
+try {
+const db = firebase.firestore();
+const movieId = generateId();
+const newMovie = {
+id: movieId,
+title: movieData.title.trim(),
+category: movieData.category,
+description: movieData.description,
+year: movieData.year || null,
+rating: movieData.rating ? parseFloat(movieData.rating) : null,
+status: movieData.status || 'Đang chiếu',
+poster: movieData.poster || 'https://via.placeholder.com/300x450/1a73e8/ffffff?text=No+Image',
+episodes: [],
+createdAt: new Date().toISOString(),
+isDeleted: false,
+admin_key: ADMIN_CREDENTIALS.key
+};
+await db.collection("movies").doc(movieId).set(newMovie);
+movies.push(newMovie);
+allMoviesCache.push(newMovie);
+if (movies.length === 1 && !trendingMovie) {
+await setTrendingMovie(movieId);
+}
+showNotification(`✅ Đã thêm phim "${newMovie.title}" lên Firebase!`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi thêm phim:', error);
+showNotification('❌ Lỗi thêm phim: ' + error.message, 'error');
+return false;
+}
+}
+*/
+// Update movie - DISABLED (Cannot edit third-party API)
+async function updateMovieInFirebase(movieId, updatedData) {
+showNotification('⚠️ Không thể cập nhật phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return false;
+}
+
+// ==================== UPDATE MOVIE IN FIREBASE (COMMENTED OUT - CANNOT EDIT API) ====================
+/* 
+async function updateMovieInFirebaseOld(movieId, updatedData) {
+try {
+const db = firebase.firestore();
+// Add security key to update data
+const updateData = {
+...updatedData,
+admin_key: ADMIN_CREDENTIALS.key,
+updatedAt: new Date().toISOString()
+};
+// Update in Firebase
+await db.collection("movies").doc(movieId).update(updateData);
+// Update in local array
+const movieIndex = movies.findIndex(m => m.id === movieId);
+if (movieIndex !== -1) {
+movies[movieIndex] = { ...movies[movieIndex], ...updateData };
+// Update cache
+const cacheIndex = allMoviesCache.findIndex(m => m.id === movieId);
+if (cacheIndex !== -1) {
+allMoviesCache[cacheIndex] = { ...allMoviesCache[cacheIndex], ...updateData };
+}
+}
+// Update trending if needed
+if (trendingMovie && trendingMovie.id === movieId) {
+trendingMovie = movies[movieIndex];
+}
+showNotification('✅ Đã cập nhật phim trên Firebase!', 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi cập nhật:', error);
+showNotification('❌ Lỗi cập nhật: ' + error.message, 'error');
+return false;
+}
+}
+*/
+
+// Delete movie - DISABLED (Cannot edit third-party API)
+async function deleteMovieFromFirebase(movieId) {
+showNotification('⚠️ Không thể xóa phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return false;
+}
+
+// ==================== DELETE MOVIE FROM FIREBASE (COMMENTED OUT - CANNOT EDIT API) ====================
+/* 
+async function deleteMovieFromFirebaseOld(movieId) {
+try {
+const db = firebase.firestore();
+// Check if movie exists
+const movieDoc = await db.collection("movies").doc(movieId).get();
+if (!movieDoc.exists) {
+showNotification('❌ Phim không tồn tại trong Firebase!', 'error');
+return false;
+}
+// Update soft delete status and send security key
+await db.collection("movies").doc(movieId).update({
+isDeleted: true,
+admin_key: ADMIN_CREDENTIALS.key,
+deletedAt: new Date().toISOString()
+});
+// Remove from local array
+movies = movies.filter(movie => movie.id !== movieId);
+allMoviesCache = allMoviesCache.filter(movie => movie.id !== movieId);
+// If deleted movie was trending, clear trending
+if (trendingMovie && trendingMovie.id === movieId) {
+trendingMovie = null;
+await db.collection("trending").doc("current").delete();
+}
+showNotification('✅ Đã xóa phim (xóa mềm)!', 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi xóa phim:', error);
+showNotification('❌ Lỗi xóa phim: ' + error.message, 'error');
+return false;
+}
+}
+*/
+
+// Delete comment - DISABLED (Firebase commented out)
+async function deleteCommentFromFirebase(commentId) {
+try {
+const db = firebase.firestore();
+await db.collection("comments").doc(commentId).delete();
+comments = comments.filter(comment => comment.id !== commentId);
+updateStats();
+showNotification('✅ Đã xóa bình luận vĩnh viễn!', 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi xóa bình luận:', error);
+showNotification('❌ Lỗi xóa bình luận: ' + error.message, 'error');
+return false;
+}
+}
+// Set trending movie (lưu trong localStorage vì không thể edit API bên thứ ba)
+async function setTrendingMovie(movieSlug, movieData) {
+try {
+let movie = movieData || movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie) {
+const response = await fetchKKPhimAPI(`${KKPHIM_API_BASE}/phim/${movieSlug}`);
+const rootData = response && response.data ? response.data : response;
+const movieInfo = rootData.movie || rootData.item || rootData;
+if (movieInfo) {
+movie = mapKKPhimMovieToLocal(movieInfo);
+}
+}
+if (!movie) {
+showNotification('❌ Không tìm thấy phim!', 'error');
+return false;
+}
+trendingMovie = movie;
+adminPreferences.trendingMovieSlug = movie.slug || movie.id;
+localStorage.setItem('nguonphimvip_admin_prefs', JSON.stringify(adminPreferences));
+if (window.firebaseDb) {
+try {
+await window.firebaseDb.collection("trending").doc("current").set({
+movieSlug: movie.slug || movie.id,
+updatedAt: new Date().toISOString()
+}, { merge: true });
+} catch (e) {
+console.error('❌ Lỗi lưu Trending lên Firebase:', e);
+}
+}
+showNotification(`🔥 Đã đặt "${movie.title}" làm Trending! (Lưu trong localStorage)`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi set trending:', error);
+showNotification('❌ Lỗi set trending: ' + error.message, 'error');
+return false;
+}
+}
+
+// ==================== SET TRENDING MOVIE FROM FIREBASE (COMMENTED OUT) ====================
+/* 
+async function setTrendingMovieOld(movieId) {
+try {
+const db = firebase.firestore();
+const movie = movies.find(m => m.id === movieId);
+if (!movie) {
+showNotification('❌ Không tìm thấy phim!', 'error');
+return false;
+}
+trendingMovie = movie;
+await db.collection("trending").doc("current").set({
+movieId: movieId,
+updatedAt: new Date().toISOString(),
+admin_key: ADMIN_CREDENTIALS.key
+}, { merge: true });
+showNotification(`🔥 Đã đặt "${movie.title}" làm Trending!`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi set trending:', error);
+showNotification('❌ Lỗi set trending: ' + error.message, 'error');
+return false;
+}
+}
+*/
+// Add episode - DISABLED (Cannot edit third-party API)
+async function addEpisodeToFirebase(movieId, episodeData) {
+showNotification('⚠️ Không thể thêm tập phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return false;
+}
+
+// ==================== ADD EPISODE TO FIREBASE (COMMENTED OUT - CANNOT EDIT API) ====================
+/* 
+async function addEpisodeToFirebaseOld(movieId, episodeData) {
+try {
+const db = firebase.firestore();
+const movie = movies.find(m => m.id === movieId);
+if (!movie) {
+showNotification('❌ Không tìm thấy phim!', 'error');
+return false;
+}
+if (!movie.episodes) {
+movie.episodes = [];
+}
+// Generate episode ID
+const episodeId = `${movieId}-ep-${episodeData.episodeNumber}`;
+// Check for duplicate episode number
+const existingEpisodeIndex = movie.episodes.findIndex(
+ep => ep.episodeNumber === parseInt(episodeData.episodeNumber)
+);
+const newEpisode = {
+id: episodeId,
+episodeNumber: parseInt(episodeData.episodeNumber),
+title: episodeData.title || `Tập ${episodeData.episodeNumber}`,
+videoUrl: episodeData.videoUrl,
+addedAt: new Date().toISOString()
+};
+if (existingEpisodeIndex !== -1) {
+// Update existing episode
+movie.episodes[existingEpisodeIndex] = newEpisode;
+showNotification(`✅ Đã cập nhật tập ${episodeData.episodeNumber} thành công!`, 'success');
+} else {
+// Add new episode
+movie.episodes.push(newEpisode);
+showNotification(`✅ Đã thêm tập ${episodeData.episodeNumber} thành công!`, 'success');
+}
+// Sort episodes
+movie.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+// Update movie in Firebase with security key
+await db.collection("movies").doc(movieId).update({
+episodes: movie.episodes,
+admin_key: ADMIN_CREDENTIALS.key,
+updatedAt: new Date().toISOString()
+});
+return true;
+} catch (error) {
+console.error('❌ Lỗi thêm tập:', error);
+showNotification('❌ Lỗi thêm tập: ' + error.message, 'error');
+return false;
+}
+}
+// Add multiple episodes to movie in Firebase with duplicate check
+async function addBulkEpisodesToFirebase(movieId, episodesData) {
+try {
+const db = firebase.firestore();
+const movie = movies.find(m => m.id === movieId);
+if (!movie) {
+showNotification('❌ Không tìm thấy phim!', 'error');
+return false;
+}
+if (!movie.episodes) {
+movie.episodes = [];
+}
+// Get existing video URLs
+const existingVideoUrls = movie.episodes.map(ep => ep.videoUrl);
+// Get current highest episode number
+const currentMaxEpisode = movie.episodes.length > 0 ?
+Math.max(...movie.episodes.map(ep => ep.episodeNumber)) : 0;
+let nextEpisodeNumber = currentMaxEpisode + 1;
+let addedCount = 0;
+let duplicateCount = 0;
+// Process each episode
+for (const episodeData of episodesData) {
+if (!episodeData.videoUrl || !episodeData.videoUrl.trim()) continue;
+// Check for duplicate URL
+if (existingVideoUrls.includes(episodeData.videoUrl.trim())) {
+duplicateCount++;
+continue; // Skip duplicate
+}
+const episodeId = `${movieId}-ep-${nextEpisodeNumber}`;
+const newEpisode = {
+id: episodeId,
+episodeNumber: nextEpisodeNumber,
+title: `Tập ${nextEpisodeNumber}`,
+videoUrl: episodeData.videoUrl.trim(),
+addedAt: new Date().toISOString()
+};
+movie.episodes.push(newEpisode);
+existingVideoUrls.push(episodeData.videoUrl.trim()); // Add to existing URLs
+nextEpisodeNumber++;
+addedCount++;
+}
+if (addedCount === 0) {
+showNotification(`Không có tập mới để thêm. Đã bỏ qua ${duplicateCount} link trùng.`, 'warning');
+return true;
+}
+// Sort episodes
+movie.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+// Update movie in Firebase with security key
+await db.collection("movies").doc(movieId).update({
+episodes: movie.episodes,
+admin_key: ADMIN_CREDENTIALS.key,
+updatedAt: new Date().toISOString()
+});
+showNotification(`✅ Đã thêm ${addedCount} tập phim thành công! (Đã bỏ qua ${duplicateCount} link trùng)`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi thêm nhiều tập:', error);
+showNotification('❌ Lỗi thêm nhiều tập: ' + error.message, 'error');
+return false;
+}
+}
+// Update episode - DISABLED (Cannot edit third-party API)
+async function updateEpisodeInFirebase(movieId, episodeId, updatedData) {
+showNotification('⚠️ Không thể cập nhật tập phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return false;
+}
+
+// ==================== UPDATE EPISODE IN FIREBASE (COMMENTED OUT - CANNOT EDIT API) ====================
+/* 
+async function updateEpisodeInFirebaseOld(movieId, episodeId, updatedData) {
+try {
+const db = firebase.firestore();
+const movie = movies.find(m => m.id === movieId);
+if (!movie || !movie.episodes) {
+showNotification('❌ Không tìm thấy phim hoặc tập phim!', 'error');
+return false;
+}
+const episodeIndex = movie.episodes.findIndex(ep => ep.id === episodeId || ep.episodeNumber === parseInt(episodeId));
+if (episodeIndex === -1) {
+showNotification('❌ Không tìm thấy tập phim!', 'error');
+return false;
+}
+movie.episodes[episodeIndex] = {
+...movie.episodes[episodeIndex],
+...updatedData,
+episodeNumber: parseInt(updatedData.episodeNumber) || movie.episodes[episodeIndex].episodeNumber,
+id: `${movieId}-ep-${parseInt(updatedData.episodeNumber) || movie.episodes[episodeIndex].episodeNumber}`
+};
+movie.episodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+await db.collection("movies").doc(movieId).update({
+episodes: movie.episodes,
+admin_key: ADMIN_CREDENTIALS.key,
+updatedAt: new Date().toISOString()
+});
+showNotification(`✅ Đã cập nhật tập ${updatedData.episodeNumber || movie.episodes[episodeIndex].episodeNumber} thành công!`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi cập nhật tập:', error);
+showNotification('❌ Lỗi cập nhật tập: ' + error.message, 'error');
+return false;
+}
+}
+*/
+// Delete episode - DISABLED (Cannot edit third-party API)
+async function deleteEpisodeFromFirebase(movieId, episodeId) {
+showNotification('⚠️ Không thể xóa tập phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return false;
+}
+
+// ==================== DELETE EPISODE FROM FIREBASE (COMMENTED OUT - CANNOT EDIT API) ====================
+/* 
+async function deleteEpisodeFromFirebaseOld(movieId, episodeId) {
+try {
+const db = firebase.firestore();
+const movie = movies.find(m => m.id === movieId);
+if (!movie || !movie.episodes) return false;
+const episodeIndex = movie.episodes.findIndex(
+ep => ep.id === episodeId || ep.episodeNumber === parseInt(episodeId)
+);
+if (episodeIndex === -1) {
+showNotification('❌ Không tìm thấy tập phim!', 'error');
+return false;
+}
+const episodeNumber = movie.episodes[episodeIndex].episodeNumber;
+movie.episodes.splice(episodeIndex, 1);
+await db.collection("movies").doc(movieId).update({
+episodes: movie.episodes,
+admin_key: ADMIN_CREDENTIALS.key,
+updatedAt: new Date().toISOString()
+});
+showNotification(`✅ Đã xóa tập ${episodeNumber} thành công!`, 'success');
+return true;
+} catch (error) {
+console.error('❌ Lỗi xóa tập:', error);
+showNotification('❌ Lỗi xóa tập: ' + error.message, 'error');
+return false;
+}
+}
+*/
+// Test KKPhim API connection
+async function testFirebaseConnection() {
+try {
+const response = await fetchKKPhimAPI(`${KKPHIM_API_BASE}/danh-sach/phim-moi-cap-nhat-v3?page=1`);
+const moviesData = response.items || response.data || [];
+console.log('=== KKPHIM API TEST ===');
+console.log('Kết nối: ✅ THÀNH CÔNG');
+console.log('Số phim:', moviesData.length);
+showNotification(`KKPhim API: ${moviesData.length} phim`, 'success');
+return true;
+} catch (error) {
+console.error('Kết nối KKPhim API: ❌ THẤT BẠI', error);
+showNotification('❌ Lỗi kết nối KKPhim API!', 'error');
+return false;
+}
+}
+
+// ==================== TEST FIREBASE CONNECTION (COMMENTED OUT) ====================
+/* 
+async function testFirebaseConnectionOld() {
+try {
+const db = firebase.firestore();
+const moviesCount = await db.collection("movies").get();
+const commentsCount = await db.collection("comments").get();
+console.log('=== FIREBASE TEST ===');
+console.log('Kết nối: ✅ THÀNH CÔNG');
+console.log('Số phim:', moviesCount.size);
+console.log('Số bình luận:', commentsCount.size);
+showNotification(`Firebase: ${moviesCount.size} phim, ${commentsCount.size} bình luận`, 'success');
+return true;
+} catch (error) {
+console.error('Kết nối Firebase: ❌ THẤT BẠI', error);
+showNotification('❌ Lỗi kết nối Firebase!', 'error');
+return false;
+}
+}
+*/
+// ==================== WRAPPER FUNCTIONS ====================
+function addMovie(movieData) {
+return addMovieToFirebase(movieData).then(success => {
+if (success) {
+loadMoviesTable();
+loadMovieDropdowns();
+updateStats();
+}
+return success;
+});
+}
+function updateMovie(movieId, updatedData) {
+return updateMovieInFirebase(movieId, updatedData).then(success => {
+if (success) {
+loadMoviesTable();
+loadMovieDropdowns();
+}
+return success;
+});
+}
+function deleteMovie(movieId) {
+return deleteMovieFromFirebase(movieId).then(success => {
+if (success) {
+loadMoviesTable();
+loadMovieDropdowns();
+updateStats();
+}
+return success;
+});
+}
+function addEpisode(movieId, episodeData) {
+return addEpisodeToFirebase(movieId, episodeData).then(success => {
+if (success) {
+loadEpisodes(movieId);
+loadMoviesTable();
+updateStats();
+}
+return success;
+});
+}
+function addBulkEpisodes(movieId, episodesData) {
+return addBulkEpisodesToFirebase(movieId, episodesData).then(success => {
+if (success) {
+loadEpisodes(movieId);
+loadMoviesTable();
+updateStats();
+}
+return success;
+});
+}
+function updateEpisode(movieId, episodeId, updatedData) {
+return updateEpisodeInFirebase(movieId, episodeId, updatedData).then(success => {
+if (success) {
+loadEpisodes(movieId);
+loadMoviesTable();
+updateStats();
+}
+return success;
+});
+}
+function deleteEpisode(movieId, episodeId) {
+return deleteEpisodeFromFirebase(movieId, episodeId).then(success => {
+if (success) {
+loadEpisodes(movieId);
+loadMoviesTable();
+updateStats();
+}
+return success;
+});
+}
+function deleteComment(commentId) {
+return deleteCommentFromFirebase(commentId).then(success => {
+if (success) {
+loadCommentsTable();
+updateStats();
+}
+return success;
+});
+}
+// ==================== EVENT LISTENERS ====================
+// Login form submission
+loginForm.addEventListener('submit', async function(e) {
+e.preventDefault();
+const username = document.getElementById('username').value.trim();
+const password = document.getElementById('password').value.trim();
+const isMainAccount = (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password);
+const isDevAccount = (username === 'admin' && password === 'admin');
+if (isMainAccount || isDevAccount) {
+loginContainer.style.display = 'none';
+adminContainer.style.display = 'block';
+errorMessage.style.display = 'none';
+await loadMoviesFromFirebase();
+await loadCommentsFromFirebase();
+sessionStorage.setItem('nguonphimvip_admin_loggedin', 'true');
+showNotification('✅ Đăng nhập thành công!', 'success');
+} else {
+errorMessage.style.display = 'block';
+showNotification('❌ Tài khoản hoặc mật khẩu không đúng!', 'error');
+}
+});
+// Logout button
+logoutBtn.addEventListener('click', function() {
+if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
+adminContainer.style.display = 'none';
+loginContainer.style.display = 'flex';
+loginForm.reset();
+sessionStorage.removeItem('nguonphimvip_admin_loggedin');
+showNotification('👋 Đã đăng xuất thành công!', 'info');
+}
+});
+// Navigation between sections
+navLinks.forEach(link => {
+link.addEventListener('click', async function(e) {
+e.preventDefault();
+// Remove active class from all links
+navLinks.forEach(l => l.classList.remove('active'));
+// Add active class to clicked link
+this.classList.add('active');
+// Get section to show
+const sectionId = this.getAttribute('data-section');
+// Hide all sections
+contentSections.forEach(section => {
+section.style.display = 'none';
+});
+// Show selected section
+document.getElementById(sectionId).style.display = 'block';
+// Special handling for backup section
+if (sectionId === 'backup') {
+backupStatusEl.textContent = movies.length > 0 ? '✓' : '✗';
+backupStatusEl.style.color = movies.length > 0 ? '#34a853' : '#ea4335';
+}
+// Special handling for episodes section
+if (sectionId === 'episodes') {
+// Reset search and show all movies in dropdown
+episodeSearch.value = '';
+renderEpisodeMovieDropdown(movies);
+}
+// Special handling for comments section
+if (sectionId === 'manage-comments') {
+loadCommentsFromFirebase();
+}
+});
+});
+// File input for movie poster
+moviePosterInput.addEventListener('change', function() {
+if (this.files && this.files[0]) {
+const file = this.files[0];
+fileLabel.textContent = file.name;
+// Create a temporary URL for the image
+const reader = new FileReader();
+reader.onload = function(e) {
+posterPreview.querySelector('img').src = e.target.result;
+posterPreview.style.display = 'block';
+// Clear URL input
+posterUrlInput.value = '';
+};
+reader.readAsDataURL(file);
+}
+});
+// Poster URL input
+posterUrlInput.addEventListener('input', function() {
+const url = this.value.trim();
+if (url) {
+posterPreview.querySelector('img').src = url;
+posterPreview.style.display = 'block';
+fileLabel.textContent = 'URL ảnh';
+// Clear file input
+moviePosterInput.value = '';
+}
+});
+// Reset add movie form
+resetFormBtn.addEventListener('click', function() {
+addMovieForm.reset();
+posterPreview.style.display = 'none';
+fileLabel.textContent = 'Chọn ảnh từ máy tính';
+posterUrlInput.value = '';
+showNotification('🔄 Đã reset form thêm phim!', 'info');
+});
+// Add movie form submission
+addMovieForm.addEventListener('submit', async function(e) {
+e.preventDefault();
+// Get poster URL (either from file or URL input)
+let posterUrl = '';
+if (posterPreview.style.display !== 'none') {
+posterUrl = posterPreview.querySelector('img').src;
+}
+// Get form data
+const movieData = {
+title: document.getElementById('movieTitle').value,
+category: document.getElementById('movieCategory').value,
+description: document.getElementById('movieDescription').value,
+year: document.getElementById('movieYear').value || null,
+rating: document.getElementById('movieRating').value || null,
+status: document.getElementById('movieStatus').value,
+poster: posterUrl
+};
+// Validate
+if (!movieData.title || movieData.title.trim() === '') {
+showNotification('Vui lòng nhập tên phim!', 'error');
+document.getElementById('movieTitle').focus();
+return;
+}
+if (!movieData.category) {
+showNotification('Vui lòng chọn thể loại!', 'error');
+document.getElementById('movieCategory').focus();
+return;
+}
+if (!movieData.description || movieData.description.trim() === '') {
+showNotification('Vui lòng nhập mô tả phim!', 'error');
+document.getElementById('movieDescription').focus();
+return;
+}
+const success = await addMovie(movieData);
+if (success) {
+// Reset form on success
+addMovieForm.reset();
+posterPreview.style.display = 'none';
+fileLabel.textContent = 'Chọn ảnh từ máy tính';
+posterUrlInput.value = '';
+// Switch to manage movies section
+switchSection('manage-movies');
+}
+});
+// Movie search functionality
+movieSearchInput.addEventListener('input', function() {
+filterMoviesTable(this.value.trim());
+});
+// Trending select change
+trendingSelect.addEventListener('change', function() {
+const movieSlug = this.value;
+if (!movieSlug) {
+trendingPreview.style.display = 'none';
+return;
+}
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+updateTrendingPreview(movie);
+});
+// Save trending button
+saveTrendingBtn.addEventListener('click', async function() {
+const movieSlug = trendingSelect.value;
+if (!movieSlug) {
+showNotification('Vui lòng chọn phim để đặt làm Trending!', 'error');
+return;
+}
+const success = await setTrendingMovie(movieSlug);
+if (success) {
+updateStats();
+loadMovieDropdowns();
+// Cập nhật preview
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+updateTrendingPreview(movie);
+}
+});
+if (trendingSearchBtn && trendingSearchInput) {
+trendingSearchBtn.addEventListener('click', function() {
+searchTrendingFromAPI();
+});
+trendingSearchInput.addEventListener('keydown', function(e) {
+if (e.key === 'Enter') {
+e.preventDefault();
+searchTrendingFromAPI();
+}
+});
+}
+// Episode search with debounce - FIXED VERSION
+const handleEpisodeSearch = debounce(async function() {
+    const searchTerm = episodeSearch.value.trim();
+    
+    if (!searchTerm) {
+        // Hiển thị tất cả phim khi không có tìm kiếm
+        renderEpisodeMovieDropdown(movies);
+        return;
+    }
+    
+    try {
+        // Chuẩn hóa từ khóa tìm kiếm (loại bỏ dấu tiếng Việt)
+        const searchTermNormalized = removeVietnameseDiacritics(searchTerm.toLowerCase());
+        
+        // Lọc phim từ cache gốc
+        const filteredMovies = allMoviesCache.filter(movie => {
+            const movieTitleNormalized = removeVietnameseDiacritics(movie.title.toLowerCase());
+            return movieTitleNormalized.includes(searchTermNormalized);
+        });
+        
+        // Nếu không tìm thấy kết quả
+        if (filteredMovies.length === 0) {
+            renderEpisodeMovieDropdown([]);
+            showNotification(`🔍 Không tìm thấy phim nào phù hợp với "${searchTerm}"`, 'info');
+        } else {
+            renderEpisodeMovieDropdown(filteredMovies);
+        }
+    } catch (error) {
+        console.error('Lỗi khi tìm kiếm phim:', error);
+        showNotification('❌ Lỗi khi tìm kiếm phim', 'error');
+        // Quay lại hiển thị tất cả phim
+        renderEpisodeMovieDropdown(movies);
+    }
+}, 300);
+
+episodeSearch.addEventListener('input', handleEpisodeSearch);
+
+// Episode movie select change
+episodeMovieSelect.addEventListener('change', function() {
+const movieSlug = this.value;
+if (!movieSlug) {
+episodeManagement.style.display = 'none';
+return;
+}
+// Find movie by slug or id
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie) {
+episodeManagement.style.display = 'none';
+return;
+}
+episodeMovieTitle.textContent = `Xem tập phim: ${movie.title} (API chỉ đọc)`;
+episodeManagement.style.display = 'block';
+loadEpisodes(movie.slug || movie.id);
+// Set next episode number
+const currentMaxEpisode = movie.episodes && movie.episodes.length > 0 ?
+Math.max(...movie.episodes.map(ep => ep.episodeNumber)) : 0;
+document.getElementById('episodeNumber').value = currentMaxEpisode + 1;
+// Check for duplicates in bulk episodes
+updateEpisodeCounter();
+});
+// Add episode button - DISABLED (Cannot edit API)
+addEpisodeBtn.addEventListener('click', async function() {
+showNotification('⚠️ Không thể thêm tập phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+/* 
+// OLD CODE - COMMENTED OUT
+const movieSlug = episodeMovieSelect.value;
+if (!movieSlug) {
+showNotification('Vui lòng chọn phim trước!', 'error');
+return;
+}
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie) {
+showNotification('Không tìm thấy phim! Vui lòng chọn từ danh sách.', 'error');
+return;
+}
+const episodeNumber = document.getElementById('episodeNumber').value;
+const episodeTitle = document.getElementById('episodeTitle').value;
+const episodeVideo = document.getElementById('episodeVideo').value;
+if (!episodeNumber || !episodeVideo) {
+showNotification('Vui lòng điền số tập và URL video!', 'error');
+return;
+}
+const episodeData = {
+episodeNumber: episodeNumber,
+title: episodeTitle,
+videoUrl: episodeVideo
+};
+await addEpisode(movie.slug || movie.id, episodeData);
+document.getElementById('episodeNumber').value = parseInt(episodeNumber) + 1;
+document.getElementById('episodeTitle').value = '';
+document.getElementById('episodeVideo').value = '';
+loadEpisodes(movie.slug || movie.id);
+updateEpisodeCounter();
+*/
+});
+// Bulk episodes input counter and duplicate check
+bulkEpisodes.addEventListener('input', function() {
+updateEpisodeCounter();
+});
+// Check duplicates button
+checkDuplicatesBtn.addEventListener('click', function() {
+const result = checkDuplicateLinks();
+if (result.duplicate > 0) {
+showNotification(`Đã phát hiện ${result.duplicate} link trùng!`, 'warning');
+} else {
+showNotification('Không có link trùng nào được phát hiện.', 'success');
+}
+});
+// Add bulk episodes button - DISABLED (Cannot edit API)
+addBulkEpisodesBtn.addEventListener('click', async function() {
+showNotification('⚠️ Không thể thêm nhiều tập phim. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+/* 
+// OLD CODE - COMMENTED OUT
+const movieSlug = episodeMovieSelect.value;
+if (!movieSlug) {
+showNotification('Vui lòng chọn phim trước!', 'error');
+return;
+}
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie) {
+showNotification('Không tìm thấy phim! Vui lòng chọn từ danh sách.', 'error');
+return;
+}
+const lines = bulkEpisodes.value.split('\n')
+.filter(line => line.trim() !== '')
+.map(line => ({ videoUrl: line.trim() }));
+if (lines.length === 0) {
+showNotification('Vui lòng nhập ít nhất một link video!', 'error');
+return;
+}
+const result = checkDuplicateLinks();
+if (result.duplicate > 0) {
+if (!confirm(`Có ${result.duplicate} link trùng với các tập đã có. Chỉ thêm ${result.unique} link mới. Tiếp tục?`)) {
+return;
+}
+}
+await addBulkEpisodes(movie.slug || movie.id, lines);
+bulkEpisodes.value = '';
+episodeCounter.textContent = '0 link đã nhập (0 link trùng)';
+duplicateWarning.style.display = 'none';
+loadEpisodes(movie.slug || movie.id);
+*/
+});
+// Edit movie modal
+closeEditModal.addEventListener('click', function() {
+editMovieModal.style.display = 'none';
+});
+cancelEdit.addEventListener('click', function() {
+editMovieModal.style.display = 'none';
+});
+// Edit episode modal
+closeEditEpisodeModal.addEventListener('click', function() {
+editEpisodeModal.style.display = 'none';
+});
+cancelEditEpisode.addEventListener('click', function() {
+editEpisodeModal.style.display = 'none';
+});
+// Close modal when clicking outside
+window.addEventListener('click', function(e) {
+if (e.target === editMovieModal) {
+editMovieModal.style.display = 'none';
+}
+if (e.target === editEpisodeModal) {
+editEpisodeModal.style.display = 'none';
+}
+if (e.target === viewDataModal) {
+viewDataModal.style.display = 'none';
+}
+});
+// Hide movie from list (localStorage only - cannot edit API)
+function hideMovieFromList(movieSlug) {
+if (!adminPreferences.hiddenMovies) {
+adminPreferences.hiddenMovies = [];
+}
+if (!adminPreferences.hiddenMovies.includes(movieSlug)) {
+adminPreferences.hiddenMovies.push(movieSlug);
+localStorage.setItem('nguonphimvip_admin_prefs', JSON.stringify(adminPreferences));
+// Reload movies table (filter out hidden movies)
+loadMoviesTable();
+showNotification('✅ Đã ẩn phim khỏi danh sách!', 'success');
+}
+}
+
+// Open edit movie modal - DISABLED (API chỉ đọc)
+function openEditMovieModal(movieSlug) {
+showNotification('⚠️ Không thể chỉnh sửa. API KKPhim là bên thứ ba (chỉ đọc). Mở trang chi tiết để xem.', 'warning');
+window.open(`movie.html?slug=${movieSlug}`, '_blank');
+return;
+/* 
+// OLD CODE - COMMENTED OUT
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie) return;
+document.getElementById('editMovieId').value = movie.id;
+document.getElementById('editMovieTitle').value = movie.title;
+document.getElementById('editMovieCategory').value = movie.category || '';
+document.getElementById('editMovieDescription').value = movie.description || '';
+document.getElementById('editMovieYear').value = movie.year || '';
+document.getElementById('editMovieRating').value = movie.rating || '';
+document.getElementById('editMovieStatus').value = movie.status || 'Đang chiếu';
+editMovieModal.style.display = 'flex';
+*/
+}
+// Open edit episode modal - DISABLED (API chỉ đọc)
+function openEditEpisodeModal(movieSlug, episodeId) {
+showNotification('⚠️ Không thể chỉnh sửa. API KKPhim là bên thứ ba (chỉ đọc).', 'warning');
+return;
+/* 
+// OLD CODE - COMMENTED OUT
+const movie = movies.find(m => m.slug === movieSlug || m.id === movieSlug);
+if (!movie || !movie.episodes) return;
+const episode = movie.episodes.find(ep => ep.id === episodeId);
+if (!episode) return;
+document.getElementById('editEpisodeMovieId').value = movieSlug;
+document.getElementById('editEpisodeId').value = episode.id;
+document.getElementById('editEpisodeNumber').value = episode.episodeNumber;
+document.getElementById('editEpisodeTitle').value = episode.title || '';
+document.getElementById('editEpisodeVideoUrl').value = episode.videoUrl || '';
+editEpisodeModal.style.display = 'flex';
+*/
+}
+// Edit movie form submission
+editMovieForm.addEventListener('submit', async function(e) {
+e.preventDefault();
+const movieId = document.getElementById('editMovieId').value;
+const updatedData = {
+title: document.getElementById('editMovieTitle').value,
+category: document.getElementById('editMovieCategory').value,
+description: document.getElementById('editMovieDescription').value,
+year: document.getElementById('editMovieYear').value || null,
+rating: document.getElementById('editMovieRating').value || null,
+status: document.getElementById('editMovieStatus').value
+};
+const success = await updateMovie(movieId, updatedData);
+if (success) {
+editMovieModal.style.display = 'none';
+}
+});
+// Edit episode form submission
+editEpisodeForm.addEventListener('submit', async function(e) {
+e.preventDefault();
+const movieId = document.getElementById('editEpisodeMovieId').value;
+const episodeId = document.getElementById('editEpisodeId').value;
+const updatedData = {
+episodeNumber: document.getElementById('editEpisodeNumber').value,
+title: document.getElementById('editEpisodeTitle').value,
+videoUrl: document.getElementById('editEpisodeVideoUrl').value
+};
+const success = await updateEpisode(movieId, episodeId, updatedData);
+if (success) {
+editEpisodeModal.style.display = 'none';
+}
+});
+// Backup & Restore events
+exportBtn.addEventListener('click', function() {
+exportData(false);
+});
+exportPrettyBtn.addEventListener('click', function() {
+exportData(true);
+});
+importFileInput.addEventListener('change', function() {
+if (this.files && this.files[0]) {
+const file = this.files[0];
+importFileLabel.textContent = file.name;
+importBtn.disabled = false;
+}
+});
+importBtn.addEventListener('click', function() {
+if (!importFileInput.files || importFileInput.files.length === 0) {
+showNotification('Vui lòng chọn file JSON trước!', 'error');
+return;
+}
+const file = importFileInput.files[0];
+const reader = new FileReader();
+reader.onload = function(e) {
+try {
+const data = JSON.parse(e.target.result);
+importData(data);
+importFileInput.value = '';
+importFileLabel.textContent = 'Chọn file JSON để nhập';
+importBtn.disabled = true;
+} catch (error) {
+showNotification('Lỗi khi đọc file: ' + error.message, 'error');
+}
+};
+reader.readAsText(file);
+});
+resetDataBtn.addEventListener('click', async function() {
+if (!confirm('⚠️ Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu trong Firebase?')) {
+return;
+}
+if (!confirm('⚠️⚠️⚠️ HÀNH ĐỘNG NÀY KHÔNG THỂ HOÀN TÁC! Bạn thực sự muốn xóa?')) {
+return;
+}
+try {
+const db = firebase.firestore();
+// Delete all movies
+const moviesSnapshot = await db.collection("movies").get();
+const batch = db.batch();
+moviesSnapshot.forEach(doc => {
+batch.delete(doc.ref);
+});
+// Delete trending
+batch.delete(db.collection("trending").doc("current"));
+// Delete all comments
+const commentsSnapshot = await db.collection("comments").get();
+commentsSnapshot.forEach(doc => {
+batch.delete(doc.ref);
+});
+await batch.commit();
+// Clear local data
+movies = [];
+allMoviesCache = [];
+trendingMovie = null;
+comments = [];
+updateStats();
+loadMovieDropdowns();
+loadMoviesTable();
+loadCommentsTable();
+showNotification('✅ Đã xóa toàn bộ dữ liệu trong Firebase!', 'success');
+} catch (error) {
+showNotification('❌ Lỗi xóa dữ liệu: ' + error.message, 'error');
+}
+});
+viewDataBtn.addEventListener('click', viewData);
+copyDataBtn.addEventListener('click', copyJsonToClipboard);
+closeViewDataModal.addEventListener('click', function() {
+viewDataModal.style.display = 'none';
+});
+closeViewDataBtn.addEventListener('click', function() {
+viewDataModal.style.display = 'none';
+});
+copyJsonBtn.addEventListener('click', copyJsonToClipboard);
+// Debug buttons
+debugBtn.addEventListener('click', function() {
+console.log('=== DEBUG INFO ===');
+console.log('Tổng số phim:', movies.length);
+console.log('Danh sách phim:', movies);
+console.log('Phim Trending:', trendingMovie);
+console.log('Tổng số bình luận:', comments.length);
+console.log('Danh sách bình luận:', comments);
+console.log('Firebase config:', firebaseConfig);
+showNotification(`📊 Tổng số phim: ${movies.length}, Bình luận: ${comments.length}`, 'info');
+});
+reloadBtn.addEventListener('click', async function() {
+showNotification('🔄 Đang reload dữ liệu từ Firebase...', 'info');
+await loadMoviesFromFirebase();
+await loadCommentsFromFirebase();
+});
+exportDebugBtn.addEventListener('click', function() {
+exportData(true);
+});
+testFirebaseBtn.addEventListener('click', testFirebaseConnection);
+// ==================== BACKUP FUNCTIONS ====================
+function exportData(pretty = false) {
+// Chuyển đổi comments timestamp
+const commentsForExport = comments.map(comment => {
+const commentData = { ...comment };
+if (commentData.timestamp && typeof commentData.timestamp.toDate === 'function') {
+commentData.timestamp = commentData.timestamp.toDate().toISOString();
+}
+return commentData;
+});
+const data = {
+movies: movies,
+trending: trendingMovie ? trendingMovie.id : null,
+comments: commentsForExport,
+exportDate: new Date().toISOString(),
+version: '2.0',
+totalMovies: movies.length,
+totalEpisodes: movies.reduce((total, movie) => total + (movie.episodes ? movie.episodes.length : 0), 0),
+totalComments: comments.length,
+securityInfo: 'Được bảo vệ bằng chìa khóa bảo mật và xóa mềm',
+features: 'Kiểm tra link trùng và chỉnh sửa tên tập'
+};
+const jsonString = pretty ?
+JSON.stringify(data, null, 2) :
+JSON.stringify(data);
+const blob = new Blob([jsonString], { type: 'application/json' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = `nguonphimvip_backup_${new Date().toISOString().split('T')[0]}.json`;
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+URL.revokeObjectURL(url);
+showNotification(`✅ Đã xuất dữ liệu thành công! File: ${a.download}`, 'success');
+}
+async function importData(data) {
+try {
+// Validate JSON structure
+if (!data.movies || !Array.isArray(data.movies)) {
+throw new Error('Dữ liệu JSON không hợp lệ: thiếu danh sách phim');
+}
+if (!confirm(`⚠️ Bạn sắp nhập ${data.movies.length} phim và ${data.comments ? data.comments.length : 0} bình luận. Dữ liệu trong Firebase sẽ bị ghi đè. Tiếp tục?`)) {
+return;
+}
+const db = firebase.firestore();
+// Delete existing data
+const moviesSnapshot = await db.collection("movies").get();
+const commentsSnapshot = await db.collection("comments").get();
+const batch = db.batch();
+moviesSnapshot.forEach(doc => {
+batch.delete(doc.ref);
+});
+commentsSnapshot.forEach(doc => {
+batch.delete(doc.ref);
+});
+await batch.commit();
+// Import new movies with security key and soft delete
+for (const movie of data.movies) {
+if (!movie.id) movie.id = generateId();
+// Ensure episodes have IDs
+if (movie.episodes && Array.isArray(movie.episodes)) {
+movie.episodes = movie.episodes.map(ep => ({
+...ep,
+id: ep.id || `${movie.id}-ep-${ep.episodeNumber}`
+}));
+}
+// Ensure security fields
+movie.isDeleted = movie.isDeleted || false;
+movie.admin_key = ADMIN_CREDENTIALS.key;
+await db.collection("movies").doc(movie.id).set(movie);
+}
+// Import comments
+if (data.comments && Array.isArray(data.comments)) {
+for (const comment of data.comments) {
+if (!comment.id) comment.id = generateId();
+// Chuyển đổi timestamp từ string sang Date nếu cần
+if (comment.timestamp && typeof comment.timestamp === 'string') {
+comment.timestamp = new Date(comment.timestamp);
+}
+await db.collection("comments").doc(comment.id).set(comment);
+}
+}
+// Set trending
+if (data.trending) {
+await db.collection("trending").doc("current").set({
+movieId: data.trending,
+updatedAt: new Date().toISOString(),
+admin_key: ADMIN_CREDENTIALS.key
+}, { merge: true });
+}
+// Reload data
+await loadMoviesFromFirebase();
+await loadCommentsFromFirebase();
+showNotification(`✅ Đã nhập dữ liệu thành công! ${data.movies.length} phim, ${data.comments ? data.comments.length : 0} bình luận`, 'success');
+} catch (error) {
+console.error('❌ Lỗi khi nhập dữ liệu:', error);
+showNotification('Lỗi khi nhập dữ liệu: ' + error.message, 'error');
+}
+}
+function viewData() {
+const data = {
+movies: movies,
+trending: trendingMovie ? trendingMovie.id : null,
+comments: comments,
+exportDate: new Date().toISOString(),
+version: '2.0',
+totalMovies: movies.length,
+totalEpisodes: movies.reduce((total, movie) => total + (movie.episodes ? movie.episodes.length : 0), 0),
+totalComments: comments.length
+};
+jsonDataPreview.textContent = JSON.stringify(data, null, 2);
+viewDataModal.style.display = 'flex';
+}
+function copyJsonToClipboard() {
+const data = {
+movies: movies,
+trending: trendingMovie ? trendingMovie.id : null,
+comments: comments,
+exportDate: new Date().toISOString(),
+version: '2.0'
+};
+const jsonString = JSON.stringify(data, null, 2);
+navigator.clipboard.writeText(jsonString).then(() => {
+showNotification('✅ Đã copy JSON vào clipboard!', 'success');
+}).catch(err => {
+console.error('❌ Lỗi khi copy:', err);
+showNotification('Lỗi khi copy: ' + err.message, 'error');
+});
+}
+// ==================== HELPER FUNCTIONS ====================
+function switchSection(sectionId) {
+// Remove active class from all links
+navLinks.forEach(l => l.classList.remove('active'));
+// Add active class to target link
+document.querySelector(`[data-section="${sectionId}"]`).classList.add('active');
+// Hide all sections
+contentSections.forEach(section => {
+section.style.display = 'none';
+});
+// Show target section
+document.getElementById(sectionId).style.display = 'block';
+}
+// ==================== INITIALIZATION ====================
+// Check if already logged in
+const isLoggedIn = sessionStorage.getItem('nguonphimvip_admin_loggedin');
+if (isLoggedIn === 'true') {
+loginContainer.style.display = 'none';
+adminContainer.style.display = 'block';
+// Load data from Firebase
+setTimeout(() => {
+loadMoviesFromFirebase();
+loadCommentsFromFirebase();
+}, 500);
+console.log('✅ Admin đã đăng nhập trước đó');
+}
+// Auto-focus on movie title when adding movie
+document.querySelector('[data-section="add-movie"]').addEventListener('click', function() {
+setTimeout(() => {
+document.getElementById('movieTitle').focus();
+}, 100);
+});
+console.log('🚀 Admin Firebase đã sẵn sàng!');
+</script>
+</body>
+</html>
+

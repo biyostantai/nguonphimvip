@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# Chuyển hướng sitemap.xml sang file sitemap.php
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
