@@ -26,7 +26,7 @@
         sessionStorage.setItem('pendingMovieSlug', slug);
         localStorage.setItem('pendingMovieSlug', slug);
       } catch(e) {}
-      window.location.replace('/movie.html');
+      window.location.replace('/movie.html?slug=' + encodeURIComponent(slug));
     }
   }
 })();
