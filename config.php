@@ -1,15 +1,18 @@
-<?php
-// config.php
-$db_host = 'localhost';
-$db_user = 'root'; // Thay bằng user database của bạn
-$db_pass = '';     // Thay bằng mật khẩu database của bạn
-$db_name = 'nguonphimvip'; // Tên database
+<?php 
+// config.php 
+// Đảm bảo không có dòng trống nào phía trên thẻ <?php này 
 
-$conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+$db_host = 'localhost'; 
+$db_user = 'root';  
+$db_pass = '';      
+$db_name = 'nguonphimvip';  
 
-if ($conn->connect_error) {
-    die("Kết nối thất bại: " . $conn->connect_error);
-}
+$conn = new mysqli($db_host, $db_user, $db_pass, $db_name); 
 
-// Thiết lập charset utf8 để không bị lỗi font
-$conn->set_charset("utf8");
+if ($conn->connect_error) { 
+    die("Kết nối thất bại: " . $conn->connect_error); 
+} 
+
+$conn->set_charset("utf8"); 
+
+// Tuyệt đối KHÔNG thêm thẻ đóng ?> ở đây để tránh chèn dòng trống vô ý 
