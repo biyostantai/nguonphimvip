@@ -5,5 +5,9 @@
 # Giữ nguyên URL /phim/slug trên thanh địa chỉ và chỉ phục vụ nội dung từ movie.html
 /phim/*      /movie.html             200
 
+# Đảm bảo truy cập trực tiếp /movie và /movie.html không bị fallback về index
+/movie       /movie.html             200
+/movie.html  /movie.html             200
+
 # Fallback cho các trường hợp khác
 /*           /index.html             200
