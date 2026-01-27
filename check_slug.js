@@ -1,74 +1,32 @@
-const fs = require('fs');
 const https = require('https');
 
-function fetchJSON(url) {
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, (res) => {
+const slugs = ['cai-chet-cua-singsala'];
+const apiBase = 'https://phimapi.com/phim/';
+
+console.log(`Đang kiểm tra slug: ${slugs[0]}...`);
+
+slugs.forEach(slug => {
+    const url = apiBase + slug;
+    const start = Date.now();
+    
+    https.get(url, (res) => {
         let data = '';
-        res.on('data', (chunk) => (data += chunk));
+        res.on('data', chunk => data += chunk);
         res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            resolve(json);
-          } catch (e) {
-            reject(new Error('Parse JSON failed: ' + e.message));
-          }
+            const time = Date.now() - start;
+            try {
+                const json = JSON.parse(data);
+                if (json.status) {
+                    const epCount = json.episodes ? json.episodes.length : (json.movie?.episodes ? json.movie.episodes.length : 0);
+                    console.log(`• ${slug} -> OK | episodes: ${epCount} | ${time}ms | name: ${json.movie.name}`);
+                } else {
+                    console.log(`• ${slug} -> ERROR: ${json.msg} | ${time}ms`);
+                }
+            } catch (e) {
+                console.log(`• ${slug} -> FAIL (Parse Error) | ${time}ms`);
+            }
         });
-      })
-      .on('error', (err) => reject(err));
-  });
-}
-
-function extractSlugsFromSitemap(xml) {
-  const slugs = [];
-  const regex = /<loc>https?:\/\/[^<]+\/phim\/([^<]+)<\/loc>/g;
-  let m;
-  while ((m = regex.exec(xml)) !== null) {
-    slugs.push(m[1]);
-  }
-  return slugs;
-}
-
-async function checkSlug(slug) {
-  const url = `https://phimapi.com/phim/${slug}`;
-  const start = Date.now();
-  try {
-    const json = await fetchJSON(url);
-    const duration = Date.now() - start;
-    const status = json.status !== false;
-    const movie = json.movie || json.item || json;
-    const episodesRoot =
-      json.episodes ||
-      json.item?.episodes ||
-      json.movie?.episodes ||
-      (json.data && (json.data.episodes || json.data.movie?.episodes)) ||
-      [];
-    const epiCount = Array.isArray(episodesRoot) ? episodesRoot.length : 0;
-    console.log(
-      `• ${slug} -> ${status ? 'OK' : 'ERR'} | episodes: ${epiCount} | ${duration}ms | name: ${movie?.name || movie?.title || 'N/A'}`
-    );
-    if (!status) {
-      console.log('  ↳ Message:', json.msg || 'unknown');
-    }
-  } catch (err) {
-    console.log(`• ${slug} -> FAIL (${err.message})`);
-  }
-}
-
-async function main() {
-  const xml = fs.readFileSync('sitemap.xml', 'utf8');
-  const slugs = extractSlugsFromSitemap(xml);
-  const sample = slugs.slice(0, 10);
-  if (sample.length === 0) {
-    console.log('❌ Không tìm thấy slug nào trong sitemap.xml');
-    return;
-  }
-  console.log(`Đang kiểm tra ${sample.length} slug đầu tiên từ sitemap.xml với phimapi.com...`);
-  for (const slug of sample) {
-    await checkSlug(slug);
-  }
-  console.log('✅ Hoàn tất kiểm tra slug');
-}
-
-main();
+    }).on('error', e => {
+        console.log(`• ${slug} -> NET ERROR: ${e.message}`);
+    });
+});

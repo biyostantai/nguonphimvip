@@ -1,4 +1,17 @@
 RewriteEngine On
 
-# Chuyển hướng sitemap.xml sang file sitemap.php
+# Sitemap động PHP
 RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
+# Chỉ rewrite khi không phải file/thư mục thật
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Đường dẫn đẹp /phim/{slug} phục vụ movie.html, KHÔNG sinh 301 để tránh vòng lặp
+RewriteRule ^phim/([^/]+)/?$ movie.html [L,QSA]
+
+# /movie phục vụ movie.html một chiều, KHÔNG chuyển ngược lại
+RewriteRule ^movie/?$ movie.html [L,QSA]
+
+# Truy cập trực tiếp movie.html thì phục vụ file, không rewrite tiếp
+RewriteRule ^movie\.html$ - [L]
