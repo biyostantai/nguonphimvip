@@ -8,30 +8,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>NguonPhimVIP - Xem phim chất lượng cao</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="shortcut icon" href="/favicon.svg">
-<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="shortcut icon" href="favicon.svg">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10/dist/hls.min.js"></script>
-<script>
-(function(){
-  var path = window.location.pathname || '';
-  if (path.indexOf('/phim/') !== -1) {
-    var segments = path.split('/').filter(function(s){return s && s.trim()!==''});
-    var idx = segments.indexOf('phim');
-    var slug = (idx !== -1 && segments[idx+1]) ? segments[idx+1] : '';
-    if (slug) {
-      try {
-        slug = decodeURIComponent(slug);
-        sessionStorage.setItem('pendingMovieSlug', slug);
-        localStorage.setItem('pendingMovieSlug', slug);
-      } catch(e) {}
-      window.location.replace('/movie.html?slug=' + encodeURIComponent(slug));
-    }
-  }
-})();
-</script>
 <!-- Thêm Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -2272,7 +2252,7 @@ class="movie-poster"
 onerror="this.src='${placeholderUrl}'">
 <div class="movie-info">
 <h4 class="movie-title" title="${movie.title}">${movie.title}</h4>
-<a href="/phim/${movieSlug}" class="watch-btn" onclick="try{sessionStorage.setItem('pendingMovieSlug','${movieSlug}');localStorage.setItem('pendingMovieSlug','${movieSlug}')}catch(e){}">
+<a href="movie.html?slug=${movieSlug}" class="watch-btn">
 <i class="fas fa-play"></i> Xem
 </a>
 </div>
@@ -2290,7 +2270,7 @@ onerror="this.src='${placeholderUrl}'">
 <div class="movie-meta">
 <span>${movie.category || 'N/A'}</span>
 </div>
-<a href="/phim/${movieSlug}" class="watch-btn" onclick="try{sessionStorage.setItem('pendingMovieSlug','${movieSlug}');localStorage.setItem('pendingMovieSlug','${movieSlug}')}catch(e){}">
+<a href="movie.html?slug=${movieSlug}" class="watch-btn">
 <i class="fas fa-play"></i> Xem phim
 </a>
 </div>
@@ -2348,9 +2328,8 @@ async function updateCategoryFilter() {
     }
 }
 function viewMovie(movieSlug) {
-            try{sessionStorage.setItem('pendingMovieSlug', movieSlug);localStorage.setItem('pendingMovieSlug', movieSlug)}catch(e){}
-            window.location.href = `/phim/${movieSlug}`;
-        }
+window.location.href = `movie.html?slug=${movieSlug}`;
+}
 // ==================== EVENT LISTENERS ====================
 newPrevBtn.addEventListener('click', () => {
 if (currentNewIndex > 0) {
@@ -2389,85 +2368,16 @@ loadData();
 }
 */
 // ==================== INITIALIZATION ====================
-function getSlugForIndex() {
-  var path = window.location.pathname || '';
-  var search = window.location.search || '';
-  var m = path.match(/\/phim\/([^\/?#]+)/i);
-  if (m && m[1]) return decodeURIComponent(m[1]);
-  var params = new URLSearchParams(search);
-  var s = params.get('slug');
-  if (s) return s.split('/')[0];
-  try {
-    var st = sessionStorage.getItem('pendingMovieSlug') || localStorage.getItem('pendingMovieSlug') || localStorage.getItem('lastMovieSlug');
-    if (st) return st;
-  } catch(e) {}
-  return null;
+window.addEventListener('DOMContentLoaded', () => {
+newMoviesCarousel.innerHTML = createSkeleton(3);
+allMoviesGrid.innerHTML = createSkeleton(12);
+loadData();
+// setupRealtimeListeners(); // Commented out - using API now
+if ('ontouchstart' in window || navigator.maxTouchPoints) {
+document.documentElement.classList.add('touch-device');
+} else {
+document.documentElement.classList.add('no-touch');
 }
-async function renderMovieInline(slug) {
-  try {
-    document.body.classList.add('movie-inline-mode');
-    var app = document.querySelector('.main') || document.body;
-    var wrapper = document.createElement('div');
-    wrapper.id = 'indexMovieView';
-    wrapper.style.padding = '12px';
-    wrapper.innerHTML = '<div id=\"ix-title\" style=\"font-size:1.2rem;margin-bottom:8px\"></div><div id=\"ix-player\" style=\"position:relative;width:100%;max-width:960px;margin:0 auto;background:#0f172a;border-radius:6px;overflow:hidden\"><div id=\"ix-player-inner\" style=\"width:100%;height:0;padding-bottom:56.25%\"></div></div><div id=\"ix-meta\" style=\"max-width:960px;margin:10px auto;color:#cbd5e1\"></div>';
-    app.innerHTML = '';
-    app.appendChild(wrapper);
-    var data = await fetchKKPhimAPI(KKPHIM_API_BASE + '/phim/' + slug);
-    var root = data && data.data ? data.data : data;
-    var info = root.movie || root.item || root;
-    var episodesSource = root.episodes || root.item?.episodes || root.movie?.episodes || data.episodes || data.item?.episodes || data.movie?.episodes || [];
-    var primary = episodesSource[0] || {};
-    var backup = episodesSource[1] || {};
-    var prim = primary.server_data || primary.serverData || primary.items || [];
-    var back = backup.server_data || backup.serverData || backup.items || [];
-    var ep = prim[0] || back[0] || {};
-    var m3u8 = ep.link_m3u8 || ep.file || '';
-    var embed = ep.link_embed || back[0]?.link_embed || '';
-    document.getElementById('ix-title').textContent = info.name || info.title || slug;
-    document.getElementById('ix-meta').innerHTML = (info.year ? ('Năm: '+info.year+' • ') : '') + (info.category && info.category[0]?.name ? info.category[0].name : (info.category || '')) ;
-    var inner = document.getElementById('ix-player-inner');
-    if (m3u8) {
-      var video = document.createElement('video');
-      video.style.position='absolute'; video.style.top='0'; video.style.left='0'; video.style.width='100%'; video.style.height='100%';
-      video.controls = true; video.autoplay = true; video.playsInline = true; video.setAttribute('playsinline','true');
-      inner.appendChild(video);
-      if (window.Hls && Hls.isSupported()) {
-        var h = new Hls();
-        h.loadSource(m3u8);
-        h.attachMedia(video);
-      } else {
-        video.src = m3u8;
-      }
-    } else if (embed) {
-      var iframe = document.createElement('iframe');
-      iframe.style.position='absolute'; iframe.style.top='0'; iframe.style.left='0'; iframe.style.width='100%'; iframe.style.height='100%';
-      iframe.setAttribute('allowfullscreen','true');
-      iframe.setAttribute('frameborder','0');
-      iframe.src = embed;
-      inner.appendChild(iframe);
-    } else {
-      inner.innerHTML = '<div style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff\">Không có nguồn phát</div>';
-    }
-    try { localStorage.setItem('lastMovieSlug', info.slug || slug); } catch(e) {}
-  } catch (e) {
-    window.location.href = '/';
-  }
-}
-window.addEventListener('DOMContentLoaded', async () => {
-  var inlineSlug = getSlugForIndex();
-  if (inlineSlug) {
-    await renderMovieInline(inlineSlug);
-    return;
-  }
-  newMoviesCarousel.innerHTML = createSkeleton(3);
-  allMoviesGrid.innerHTML = createSkeleton(12);
-  loadData();
-  if ('ontouchstart' in window || navigator.maxTouchPoints) {
-    document.documentElement.classList.add('touch-device');
-  } else {
-    document.documentElement.classList.add('no-touch');
-  }
 });
 // Chặn chuột phải
 document.addEventListener('contextmenu', event => event.preventDefault());

@@ -1,7 +1,8 @@
 const fs = require('fs');
 
 async function generateSitemap() {
-    const domain = "https://nguonphimvip.online";
+    // Sử dụng domain mặc định là nguonphimvip.pages.dev nếu chưa cấu hình custom domain
+    const domain = "https://nguonphimvip.pages.dev";
     const totalPages = 20; // Quét 20 trang để lấy nhiều phim
     let movies = [];
 
