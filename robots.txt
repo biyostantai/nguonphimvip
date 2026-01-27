@@ -1,10 +1,9 @@
 User-agent: *
 Allow: /
 Allow: /sitemap.xml
-Allow: /sitemap.php
 Disallow: /admin
 Disallow: /search
 Disallow: /?*
 Disallow: /*?slug=
 Disallow: /cgi-bin/
-Sitemap: https://nguonphimvip.online/sitemap.php
+Sitemap: https://nguonphimvip.online/sitemap.xml
