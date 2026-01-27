@@ -25,14 +25,17 @@ if ($result->num_rows > 0) {
         // Format ngày theo chuẩn ISO 8601 (YYYY-MM-DD) cho sitemap
         $lastmod = date('Y-m-d', strtotime($row['modified']));
         
-        // Tạo link dạng movie.html?slug=...
-        $loc = "https://nguonphimvip.online/movie.html?slug=" . $slug;
+        // Tạo link đẹp dạng /phim/ten-phim
+        $loc = "https://nguonphimvip.online/phim/" . $slug;
 
         echo '<url>';
         echo '<loc>' . htmlspecialchars($loc) . '</loc>';
         echo '<lastmod>' . $lastmod . '</lastmod>';
         echo '<changefreq>weekly</changefreq>';
-        echo '<priority>0.8</priority>';
+        // Ưu tiên phim mới cập nhật
+        $days_diff = (time() - strtotime($row['modified'])) / (60 * 60 * 24);
+        $priority = $days_diff < 7 ? '0.9' : '0.7'; 
+        echo '<priority>' . $priority . '</priority>';
         echo '</url>';
     }
 }

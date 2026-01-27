@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -2034,7 +2034,60 @@ function loadEpisodes() {
         }
     }
     renderEpisodesPage();
+    // Hiển thị phim liên quan (Lấy phim mới nhất làm "Liên quan" để tăng internal link)
+    fetchLatestMoviesForRelated();
 }
+
+function fetchLatestMoviesForRelated() {
+    const relatedGrid = document.querySelector('.related-movies-grid');
+    if (!relatedGrid) return;
+    
+    // Fetch trang 1 phim mới
+    fetch('https://phimapi.com/danh-sach/phim-moi-cap-nhat?page=1')
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.items && data.items.length > 0) {
+                // Lọc bỏ phim hiện tại
+                const relatedMovies = data.items
+                    .filter(m => m.slug !== (currentMovie ? currentMovie.slug : ''))
+                    .slice(0, 10); // Lấy 10 phim
+                
+                if (relatedMovies.length > 0) {
+                    renderRelatedMovies(relatedMovies);
+                } else {
+                    document.querySelector('.related-movies-section').style.display = 'none';
+                }
+            }
+        })
+        .catch(err => {
+            console.error("Lỗi tải phim liên quan:", err);
+            document.querySelector('.related-movies-section').style.display = 'none';
+        });
+}
+
+function renderRelatedMovies(movies) {
+    const relatedGrid = document.querySelector('.related-movies-grid');
+    if (!relatedGrid) return;
+    
+    relatedGrid.innerHTML = movies.map(movie => {
+        // Dùng link đẹp /phim/slug cho internal link
+        const movieLink = `/phim/${movie.slug}`;
+        const posterUrl = convertImageToWebP(movie.poster_url || movie.thumb_url);
+        
+        return `
+            <a href="${movieLink}" class="movie-card" title="${movie.name}">
+                <img src="${posterUrl}" alt="${movie.name}" class="movie-poster" loading="lazy">
+                <div class="movie-info">
+                    <h3 class="movie-title-grid">${movie.name}</h3>
+                    <div class="watch-btn">
+                        <i class="fas fa-play" style="font-size: 0.5rem;"></i> Xem ngay
+                    </div>
+                </div>
+            </a>
+        `;
+    }).join('');
+}
+
 // ==================== FAKE PLAYER FUNCTION ====================
 function playEpisode(index, autoPlay = false) {
 if (!currentMovie || !currentMovie.episodes || !currentMovie.episodes[index]) {
