@@ -7,4 +7,4 @@ Disallow: /search
 Disallow: /?*
 Disallow: /*?slug=
 Disallow: /cgi-bin/
-Sitemap: https://nguonphimvip.online/sitemap.xml
+Sitemap: https://nguonphimvip.online/sitemap.php
