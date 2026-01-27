@@ -13,4 +13,3 @@ if ($conn->connect_error) {
 
 // Thiết lập charset utf8 để không bị lỗi font
 $conn->set_charset("utf8");
-?>
