@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -1504,14 +1504,21 @@ function getMovieSlugFromURL() {
     const search = window.location.search || '';
     
     console.log("📍 Analyzing URL:", window.location.href);
-    console.log("   Path:", path);
-    console.log("   Search:", search);
 
-    // 1. Ưu tiên lấy từ URL Parameter (?slug=...)
+    // 1. Regex mạnh mẽ nhất cho đường dẫn /phim/slug
+    // Bắt pattern /phim/ten-phim, hỗ trợ cả trường hợp có slash cuối hoặc không
+    const phimRegex = /\/phim\/([^\/?#]+)/i;
+    const match = path.match(phimRegex);
+    if (match && match[1]) {
+        console.log("   ✅ Found slug via Regex:", match[1]);
+        return match[1];
+    }
+
+    // 2. Ưu tiên lấy từ URL Parameter (?slug=...)
     const urlParams = new URLSearchParams(search);
     let paramSlug = urlParams.get('slug') || urlParams.get('id');
     
-    // 1.1 Kiểm tra SessionStorage (Fallback cho trường hợp redirect bị mất query param)
+    // 2.1 Kiểm tra SessionStorage (Fallback cho trường hợp redirect bị mất query param)
     if (!paramSlug) {
         try {
             const storedSlug = sessionStorage.getItem('pendingMovieSlug');
@@ -1535,25 +1542,8 @@ function getMovieSlugFromURL() {
         return paramSlug;
     }
 
-    const segments = path.split('/').filter(Boolean);
-    console.log("   Segments:", segments);
-    
-    // 2. Tìm segment sau 'phim' (ví dụ: /phim/ten-phim)
-    const phimIndex = segments.findIndex(s => s.toLowerCase() === 'phim');
-    if (phimIndex !== -1 && segments[phimIndex + 1]) {
-        let pathSlug = segments[phimIndex + 1];
-        // Decode URI component để xử lý tiếng Việt hoặc ký tự đặc biệt
-        try {
-            pathSlug = decodeURIComponent(pathSlug);
-        } catch (e) {
-            console.warn("Lỗi decode slug:", e);
-        }
-        console.log("   ✅ Found slug after 'phim':", pathSlug);
-        return pathSlug;
-    }
-    
-    // 3. Fallback: Lấy segment cuối cùng nếu không phải là các từ khóa hệ thống
-    // Hỗ trợ trường hợp rewrite bị mất chữ 'phim' -> /ten-phim
+    // 3. Fallback: Lấy segment cuối cùng
+    const segments = path.split('/').filter(s => s && s.trim() !== '');
     if (segments.length > 0) {
         let lastSegment = segments[segments.length - 1];
         const ignoreList = ['movie', 'movie.html', 'index', 'index.html', 'phim'];
@@ -2581,12 +2571,12 @@ this.querySelector('span').textContent = 'Tự động';
 lightsOffBtn.addEventListener('click', toggleLights);
 // ==================== INITIALIZATION ====================
 window.addEventListener('DOMContentLoaded', () => {
-console.log('🚀 Khởi động movie page...');
-console.log('📱 HLS.js supported:', Hls.isSupported());
-console.log('🌐 User Agent:', navigator.userAgent);
-setTimeout(() => {
-loadMovieData();
-}, 100);
+    console.log('🚀 Khởi động movie page...');
+    console.log('📱 HLS.js supported:', Hls.isSupported());
+    console.log('🌐 User Agent:', navigator.userAgent);
+    
+    // Khởi chạy ngay lập tức, không delay
+    loadMovieData();
 // ==================== REALTIME UPDATES (COMMENTED OUT - USING API NOW) ====================
 /* 
 // Thiết lập real-time updates (KHÔNG lọc theo status)
