@@ -13,6 +13,24 @@
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var path = window.location.pathname || '';
+  if (path.indexOf('/phim/') !== -1) {
+    var seg = path.split('/').filter(function(s){return s && s.trim()!==''});
+    var idx = seg.indexOf('phim');
+    if (idx !== -1 && seg[idx+1]) {
+      var slug = seg[idx+1];
+      try {
+        slug = decodeURIComponent(slug);
+        sessionStorage.setItem('pendingMovieSlug', slug);
+        localStorage.setItem('pendingMovieSlug', slug);
+      } catch(e) {}
+      window.location.replace('/movie.html');
+    }
+  }
+})();
+</script>
 <!-- Thêm Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
