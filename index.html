@@ -2253,7 +2253,7 @@ class="movie-poster"
 onerror="this.src='${placeholderUrl}'">
 <div class="movie-info">
 <h4 class="movie-title" title="${movie.title}">${movie.title}</h4>
-<a href="movie.html?slug=${movieSlug}" class="watch-btn">
+<a href="/phim/${movieSlug}" class="watch-btn" onclick="try{sessionStorage.setItem('pendingMovieSlug','${movieSlug}');localStorage.setItem('pendingMovieSlug','${movieSlug}')}catch(e){}">
 <i class="fas fa-play"></i> Xem
 </a>
 </div>
@@ -2271,7 +2271,7 @@ onerror="this.src='${placeholderUrl}'">
 <div class="movie-meta">
 <span>${movie.category || 'N/A'}</span>
 </div>
-<a href="movie.html?slug=${movieSlug}" class="watch-btn">
+<a href="/phim/${movieSlug}" class="watch-btn" onclick="try{sessionStorage.setItem('pendingMovieSlug','${movieSlug}');localStorage.setItem('pendingMovieSlug','${movieSlug}')}catch(e){}">
 <i class="fas fa-play"></i> Xem phim
 </a>
 </div>
@@ -2329,7 +2329,8 @@ async function updateCategoryFilter() {
     }
 }
 function viewMovie(movieSlug) {
-            window.location.href = `movie.html?slug=${movieSlug}`;
+            try{sessionStorage.setItem('pendingMovieSlug', movieSlug);localStorage.setItem('pendingMovieSlug', movieSlug)}catch(e){}
+            window.location.href = `/phim/${movieSlug}`;
         }
 // ==================== EVENT LISTENERS ====================
 newPrevBtn.addEventListener('click', () => {

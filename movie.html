@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
@@ -1505,8 +1505,6 @@ function getMovieSlugFromURL() {
     
     console.log("📍 Analyzing URL:", window.location.href);
 
-    // 1. Regex mạnh mẽ nhất cho đường dẫn /phim/slug
-    // Bắt pattern /phim/ten-phim, hỗ trợ cả trường hợp có slash cuối hoặc không
     const phimRegex = /\/phim\/([^\/?#]+)/i;
     const match = path.match(phimRegex);
     if (match && match[1]) {
@@ -1514,18 +1512,21 @@ function getMovieSlugFromURL() {
         return match[1];
     }
 
-    // 2. Ưu tiên lấy từ URL Parameter (?slug=...)
     const urlParams = new URLSearchParams(search);
     let paramSlug = urlParams.get('slug') || urlParams.get('id');
     
-    // 2.1 Kiểm tra SessionStorage (Fallback cho trường hợp redirect bị mất query param)
     if (!paramSlug) {
         try {
-            const storedSlug = sessionStorage.getItem('pendingMovieSlug');
+            // Ưu tiên sessionStorage
+            let storedSlug = sessionStorage.getItem('pendingMovieSlug');
+            if (!storedSlug) {
+                // Thử localStorage nếu session không có
+                storedSlug = localStorage.getItem('pendingMovieSlug') || localStorage.getItem('lastMovieSlug');
+            }
             if (storedSlug) {
-                console.log("   ✅ Found slug in sessionStorage:", storedSlug);
-                // Xóa sau khi lấy để tránh dùng lại cho trang khác
-                sessionStorage.removeItem('pendingMovieSlug');
+                console.log("   ✅ Found slug in storage:", storedSlug);
+                try { sessionStorage.removeItem('pendingMovieSlug'); } catch(e) {}
+                try { localStorage.removeItem('pendingMovieSlug'); } catch(e) {}
                 paramSlug = storedSlug;
             }
         } catch (e) {
@@ -1534,7 +1535,6 @@ function getMovieSlugFromURL() {
     }
 
     if (paramSlug) {
-        // Nếu slug chứa ký tự phân cách (do rewrite splat), chỉ lấy phần đầu
         if (paramSlug.includes('/')) {
             paramSlug = paramSlug.split('/')[0];
         }
@@ -1542,7 +1542,21 @@ function getMovieSlugFromURL() {
         return paramSlug;
     }
 
-    // 3. Fallback: Lấy segment cuối cùng
+    // Fallback: thử lấy slug từ referrer nếu cùng domain
+    try {
+        const ref = document.referrer || '';
+        if (ref) {
+            const refUrl = new URL(ref);
+            if (refUrl.host === window.location.host) {
+                const refMatch = ref.match(/\/phim\/([^\/?#]+)/i);
+                if (refMatch && refMatch[1]) {
+                    console.log("   ✅ Found slug via referrer:", refMatch[1]);
+                    return refMatch[1];
+                }
+            }
+        }
+    } catch (e) {}
+
     const segments = path.split('/').filter(s => s && s.trim() !== '');
     if (segments.length > 0) {
         let lastSegment = segments[segments.length - 1];
@@ -1584,7 +1598,7 @@ function showError(message) {
              <p style="margin-bottom: 10px;">Nếu link bị lỗi, bạn có thể thử nhập mã phim (slug) thủ công:</p>
              <div style="display: flex; gap: 8px; max-width: 100%; justify-content: center;">
                 <input type="text" id="manualSlugInput" placeholder="Ví dụ: 911-nashville" value="${slug || ''}" style="flex: 1; max-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--gray); background: var(--darker); color: white;">
-                <button onclick="const s = document.getElementById('manualSlugInput').value; if(s) window.location.href='movie.html?slug=' + s;" style="padding: 8px 15px; background: var(--primary); border-radius: 4px; color: white; cursor: pointer;">Xem Phim</button>
+                <button onclick="const s = document.getElementById('manualSlugInput').value; if(s) window.location.href='/phim/' + s;" style="padding: 8px 15px; background: var(--primary); border-radius: 4px; color: white; cursor: pointer;">Xem Phim</button>
              </div>
         </div>`;
         
@@ -1893,6 +1907,7 @@ playerContainer.innerHTML = `
 }
 showContent();
 currentMovieSlugForComments = movieInfo.slug || movieSlug;
+    try { localStorage.setItem('lastMovieSlug', currentMovieSlugForComments); } catch(e) {}
 loadCommentsForMovie(currentMovieSlugForComments);
 } catch (error) {
         console.error('❌ Lỗi khi tải dữ liệu phim:', error);
@@ -2549,7 +2564,7 @@ class="movie-poster"
 onerror="this.src='${placeholderUrl}'">
 <div class="movie-info">
 <h4 class="movie-title-grid" title="${movie.title}">${movie.title}</h4>
-<a href="movie.html?slug=${movieSlug}" class="watch-btn">
+<a href="/phim/${movieSlug}" class="watch-btn" onclick="try{sessionStorage.setItem('pendingMovieSlug','${movieSlug}');localStorage.setItem('pendingMovieSlug','${movieSlug}')}catch(e){}">
 <i class="fas fa-play"></i> Xem
 </a>
 </div>
@@ -2574,8 +2589,6 @@ window.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Khởi động movie page...');
     console.log('📱 HLS.js supported:', Hls.isSupported());
     console.log('🌐 User Agent:', navigator.userAgent);
-    
-    // Khởi chạy ngay lập tức, không delay
     loadMovieData();
 // ==================== REALTIME UPDATES (COMMENTED OUT - USING API NOW) ====================
 /* 

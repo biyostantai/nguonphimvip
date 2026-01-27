@@ -27,9 +27,9 @@
                         console.error('Failed to save slug:', e);
                     }
 
-                    // Chuyển hướng về movie.html với query param (vẫn cố gắng truyền qua URL)
+                    // Chuyển hướng về link đẹp /phim/slug
                     // Sử dụng replace để không lưu lịch sử trang lỗi
-                    window.location.replace('/movie.html?slug=' + slug);
+                    window.location.replace('/phim/' + slug);
                     return;
                 }
             }

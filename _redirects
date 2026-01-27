@@ -1,9 +1,11 @@
 # Cloudflare Pages Redirect Rules
 # Cú pháp: /source /destination status
 
+# Chặn truy cập trực tiếp /movie (không có slug) -> trả về Trang chủ (301)
+/movie        /index.html             301
+
 # Rewrite (200) cho đường dẫn đẹp /phim/slug
-# Server sẽ âm thầm phục vụ nội dung movie.html mà không đổi URL trên thanh địa chỉ
-# Code JS trong movie.html sẽ tự lấy slug từ đường dẫn (window.location.pathname)
+# Giữ nguyên URL /phim/slug trên thanh địa chỉ và chỉ phục vụ nội dung từ movie.html
 /phim/*      /movie.html             200
 
 # Fallback cho các trường hợp khác
